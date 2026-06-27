@@ -1,8 +1,8 @@
 import api from './axios';
 import type { Service, Product, ServicePrice } from '../types';
 
-// Services
-export const getServices = (): Promise<Service[]> => api.get('/services').then((r) => r.data);
+// Services — public returns only active; admin/all returns everything
+export const getServices = (): Promise<Service[]> => api.get('/services/admin/all').then((r) => r.data);
 export const createService = (data: Partial<Service>) => api.post('/services', data).then((r) => r.data);
 export const updateService = (id: number, data: Partial<Service>) =>
   api.put(`/services/${id}`, data).then((r) => r.data);
