@@ -73,6 +73,7 @@ export interface Service {
   estimatedHours?: number;
   isActive: boolean;
   image?: string;
+  linkedServiceIds?: any;
 }
 
 export interface Product {

@@ -207,8 +207,14 @@ const OrdersPage: React.FC = () => {
         <DataGrid
           rows={filtered} columns={columns} loading={isLoading} autoHeight
           checkboxSelection
-          rowSelectionModel={selectedRowIds}
-          onRowSelectionModelChange={(ids) => setSelectedRowIds(ids as number[])}
+          rowSelectionModel={selectedRowIds as any}
+          onRowSelectionModelChange={(model: any) => {
+            if (model && Array.isArray(model.ids)) {
+              setSelectedRowIds(model.ids);
+            } else if (Array.isArray(model)) {
+              setSelectedRowIds(model);
+            }
+          }}
           pageSizeOptions={[10, 25, 50]} disableRowSelectionOnClick={false}
           initialState={{ pagination: { paginationModel: { pageSize: 10 } } }}
           sx={{ border: 'none', '& .MuiDataGrid-columnHeaders': { fontWeight: 700 } }}

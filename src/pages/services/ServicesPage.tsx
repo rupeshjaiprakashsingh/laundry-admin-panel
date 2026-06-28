@@ -25,7 +25,15 @@ import type { Service, Product, ServicePrice } from '../../types';
 
 const SERVICE_TYPES = ['Washing', 'Dry Cleaning', 'Ironing', 'Other'];
 
-const emptyService = { serviceName: '', serviceType: '', price: 0, description: '', estimatedHours: undefined as number | undefined, isActive: true };
+const emptyService = {
+  serviceName: '',
+  serviceType: '',
+  price: 0,
+  description: '',
+  estimatedHours: undefined as number | undefined,
+  isActive: true,
+  linkedServiceIds: [] as number[],
+};
 const emptyProduct = { name: '', emoji: '👕', isActive: true };
 
 // ─── Service Tab ──────────────────────────────────────────────────────────────
@@ -58,7 +66,19 @@ const ServicesTab: React.FC = () => {
   });
 
   const openCreate = () => { setEditService(null); setForm({ ...emptyService }); setFormOpen(true); };
-  const openEdit = (s: Service) => { setEditService(s); setForm({ serviceName: s.serviceName, serviceType: s.serviceType, price: s.price, description: s.description || '', estimatedHours: s.estimatedHours, isActive: s.isActive }); setFormOpen(true); };
+  const openEdit = (s: Service) => {
+    setEditService(s);
+    setForm({
+      serviceName: s.serviceName,
+      serviceType: s.serviceType,
+      price: s.price,
+      description: s.description || '',
+      estimatedHours: s.estimatedHours,
+      isActive: s.isActive,
+      linkedServiceIds: Array.isArray(s.linkedServiceIds) ? (s.linkedServiceIds as number[]) : [],
+    });
+    setFormOpen(true);
+  };
 
   const handleSubmit = () => {
     if (!form.serviceName.trim() || !form.serviceType.trim()) return;
@@ -130,6 +150,36 @@ const ServicesTab: React.FC = () => {
               <TextField fullWidth size="small" label="Description" multiline rows={2} value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
                 placeholder="e.g. ₹79 / kg | 48 Hrs" />
+            </Grid>
+            <Grid size={{ xs: 12 }}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Link Other Services (display products below)</InputLabel>
+                <Select
+                  multiple
+                  value={form.linkedServiceIds || []}
+                  label="Link Other Services (display products below)"
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setForm({ ...form, linkedServiceIds: typeof val === 'string' ? val.split(',').map(Number) : val as number[] });
+                  }}
+                  renderValue={(selected) => (
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                      {(selected as number[]).map((id) => {
+                        const matched = services.find((s: Service) => s.id === id);
+                        return <Chip key={id} label={matched ? matched.serviceName : id} size="small" />;
+                      })}
+                    </Box>
+                  )}
+                >
+                  {services
+                    .filter((s: Service) => !editService || s.id !== editService.id)
+                    .map((s: Service) => (
+                      <MenuItem key={s.id} value={s.id}>
+                        {s.serviceName} ({s.serviceType})
+                      </MenuItem>
+                    ))}
+                </Select>
+              </FormControl>
             </Grid>
             <Grid size={{ xs: 12 }}>
               <FormControlLabel
@@ -249,7 +299,7 @@ const ProductsTab: React.FC = () => {
               placeholder="e.g. Men's Shirt" />
             <TextField fullWidth size="small" label="Emoji *" value={form.emoji}
               onChange={(e) => setForm({ ...form, emoji: e.target.value })}
-              placeholder="e.g. 👕" inputProps={{ maxLength: 4 }} />
+              placeholder="e.g. 👕" slotProps={{ htmlInput: { maxLength: 4 } }} />
             <FormControlLabel control={<Switch checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} />} label="Active" />
           </Stack>
         </DialogContent>
