@@ -19,6 +19,7 @@ import PaymentsPage from './pages/payments/PaymentsPage';
 import ReportsPage from './pages/reports/ReportsPage';
 import SettingsPage from './pages/settings/SettingsPage';
 import LaundryShopsPage from './pages/laundry-shops/LaundryShopsPage';
+import CouponsPage from './pages/coupons/CouponsPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -73,6 +74,7 @@ function AppContent() {
             <Route path="/reports" element={<ReportsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/laundry-shops" element={<LaundryShopsPage />} />
+            <Route path="/coupons" element={<CouponsPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>

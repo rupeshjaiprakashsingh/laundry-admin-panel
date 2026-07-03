@@ -27,6 +27,7 @@ import NotificationsIcon from '@mui/icons-material/Notifications';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import WaterDropIcon from '@mui/icons-material/WaterDrop';
 import StoreIcon from '@mui/icons-material/Store';
+import LocalOfferIcon from '@mui/icons-material/LocalOffer';
 
 import { logout } from '../app/authSlice';
 import { useAuth } from '../hooks/useAuth';
@@ -49,6 +50,7 @@ const navItems: NavItem[] = [
   { label: 'Employees', icon: <BadgeIcon />, path: '/employees', roles: ['SuperAdmin', 'BranchManager'] },
   { label: 'Services', icon: <LocalLaundryServiceIcon />, path: '/services', roles: ['SuperAdmin'] },
   { label: 'Pricing', icon: <AttachMoneyIcon />, path: '/pricing', roles: ['SuperAdmin'] },
+  { label: 'Coupons', icon: <LocalOfferIcon />, path: '/coupons', roles: ['SuperAdmin'] },
   { label: 'Pickups', icon: <LocalShippingIcon />, path: '/pickups' },
   { label: 'Deliveries', icon: <DeliveryDiningIcon />, path: '/deliveries' },
   { label: 'Laundry Shops', icon: <StoreIcon />, path: '/laundry-shops', roles: ['SuperAdmin', 'BranchManager', 'Employee'] },

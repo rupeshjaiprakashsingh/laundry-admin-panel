@@ -197,3 +197,12 @@ export interface LoginResponse {
   refreshToken: string;
   user: AuthUser;
 }
+
+export interface Coupon {
+  id: number;
+  code: string;
+  discount: number;
+  description?: string;
+  isActive: boolean;
+  createdDate: string;
+}

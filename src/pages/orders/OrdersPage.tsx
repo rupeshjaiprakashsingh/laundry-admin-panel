@@ -7,7 +7,7 @@ import {
   Alert, CircularProgress, Stack, InputAdornment, Badge, Avatar,
   List, ListItemButton, ListItemText, ListItemAvatar,
 } from '@mui/material';
-import { DataGrid, type GridColDef } from '@mui/x-data-grid';
+import { DataGrid, type GridColDef, type GridRowSelectionModel } from '@mui/x-data-grid';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import SearchIcon from '@mui/icons-material/Search';
 import VisibilityIcon from '@mui/icons-material/Visibility';
@@ -49,7 +49,7 @@ const OrdersPage: React.FC = () => {
   const [newPayment, setNewPayment] = useState('');
 
   // Multi-select state for bulk assign
-  const [selectedRowIds, setSelectedRowIds] = useState<number[]>([]);
+  const [selectedRowIds, setSelectedRowIds] = useState<GridRowSelectionModel>({ type: 'include', ids: new Set() });
   const [bulkAssignOpen, setBulkAssignOpen] = useState(false);
   const [selectedShopId, setSelectedShopId] = useState<number | null>(null);
 
@@ -71,16 +71,17 @@ const OrdersPage: React.FC = () => {
       qc.invalidateQueries({ queryKey: ['orders'] });
       qc.invalidateQueries({ queryKey: ['laundry-shops'] });
       setBulkAssignOpen(false);
-      setSelectedRowIds([]);
+      setSelectedRowIds({ type: 'include', ids: new Set() });
       setSelectedShopId(null);
     },
   });
 
   // Auto-suggest: get pincode of the first selected order's customer
-  const firstSelectedOrder = useMemo(() =>
-    selectedRowIds.length > 0 ? orders.find((o) => o.id === selectedRowIds[0]) : undefined,
-    [selectedRowIds, orders]
-  );
+  const firstSelectedOrder = useMemo(() => {
+    if (selectedRowIds.ids.size === 0) return undefined;
+    const firstId = selectedRowIds.ids.values().next().value;
+    return firstId ? orders.find((o) => o.id === firstId) : undefined;
+  }, [selectedRowIds, orders]);
   const firstPincode = firstSelectedOrder?.customer?.pincode;
   const sortedShops = useMemo(() => {
     if (!firstPincode) return laundryShops.filter((s) => s.isActive);
@@ -163,14 +164,14 @@ const OrdersPage: React.FC = () => {
       />
 
       {/* Bulk Action Bar — shows when rows are selected */}
-      {selectedRowIds.length > 0 && (
+      {selectedRowIds.ids.size > 0 && (
         <Card sx={{ mb: 2, border: (t) => `2px solid ${t.palette.primary.main}`, bgcolor: (t) => t.palette.action.hover }}>
           <CardContent sx={{ p: '12px 16px !important', display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Badge badgeContent={selectedRowIds.length} color="primary">
+            <Badge badgeContent={selectedRowIds.ids.size} color="primary">
               <AssignmentIcon color="primary" />
             </Badge>
             <Typography sx={{ fontWeight: 700, flex: 1 }}>
-              {selectedRowIds.length} order{selectedRowIds.length !== 1 ? 's' : ''} selected
+              {selectedRowIds.ids.size} order{selectedRowIds.ids.size !== 1 ? 's' : ''} selected
             </Typography>
             <Button
               variant="contained"
@@ -180,7 +181,7 @@ const OrdersPage: React.FC = () => {
             >
               Assign to Laundry Shop
             </Button>
-            <Button size="small" onClick={() => setSelectedRowIds([])}>Clear Selection</Button>
+            <Button size="small" onClick={() => setSelectedRowIds({ type: 'include', ids: new Set() })}>Clear Selection</Button>
           </CardContent>
         </Card>
       )}
@@ -207,14 +208,9 @@ const OrdersPage: React.FC = () => {
         <DataGrid
           rows={filtered} columns={columns} loading={isLoading} autoHeight
           checkboxSelection
-          rowSelectionModel={selectedRowIds as any}
-          onRowSelectionModelChange={(model: any) => {
-            if (model && Array.isArray(model.ids)) {
-              setSelectedRowIds(model.ids);
-            } else if (Array.isArray(model)) {
-              setSelectedRowIds(model);
-            }
-          }}
+          rowSelectionModel={selectedRowIds}
+          onRowSelectionModelChange={setSelectedRowIds}
+          getRowId={(row: any) => row.id}
           pageSizeOptions={[10, 25, 50]} disableRowSelectionOnClick={false}
           initialState={{ pagination: { paginationModel: { pageSize: 10 } } }}
           sx={{ border: 'none', '& .MuiDataGrid-columnHeaders': { fontWeight: 700 } }}
@@ -366,7 +362,7 @@ const OrdersPage: React.FC = () => {
             <Box>
               <Typography sx={{ fontWeight: 700 }}>Assign to Laundry Shop</Typography>
               <Typography variant="caption" color="text.secondary">
-                {selectedRowIds.length} order{selectedRowIds.length !== 1 ? 's' : ''} selected
+                {selectedRowIds.ids.size} order{selectedRowIds.ids.size !== 1 ? 's' : ''} selected
                 {firstPincode && ` · Suggesting shops near PIN: ${firstPincode}`}
               </Typography>
             </Box>
@@ -395,7 +391,7 @@ const OrdersPage: React.FC = () => {
                     <ListItemText
                       primary={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Typography sx={{ fontWeight: 700, fontSize: 14 }}>{shop.shopName}</Typography>
+                           <Typography sx={{ fontWeight: 700, fontSize: 14 }}>{shop.shopName}</Typography>
                           {isExact && <Chip label="📍 Exact Match" size="small" color="success" sx={{ fontSize: 10, height: 20 }} />}
                           {isNear && <Chip label="Near Match" size="small" color="warning" sx={{ fontSize: 10, height: 20 }} />}
                         </Box>
@@ -424,11 +420,11 @@ const OrdersPage: React.FC = () => {
             startIcon={bulkAssignMutation.isPending ? <CircularProgress size={16} color="inherit" /> : <AssignmentIcon />}
             onClick={() => {
               if (selectedShopId) {
-                bulkAssignMutation.mutate({ orderIds: selectedRowIds, shopId: selectedShopId });
+                bulkAssignMutation.mutate({ orderIds: Array.from(selectedRowIds.ids) as number[], shopId: selectedShopId });
               }
             }}
           >
-            {bulkAssignMutation.isPending ? 'Assigning...' : `Assign ${selectedRowIds.length} Order${selectedRowIds.length !== 1 ? 's' : ''}`}
+            {bulkAssignMutation.isPending ? 'Assigning...' : `Assign ${selectedRowIds.ids.size} Order${selectedRowIds.ids.size !== 1 ? 's' : ''}`}
           </Button>
         </DialogActions>
       </Dialog>
