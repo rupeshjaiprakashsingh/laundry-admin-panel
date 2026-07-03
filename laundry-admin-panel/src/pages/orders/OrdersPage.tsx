@@ -24,16 +24,15 @@ import { formatCurrency, formatDate, exportToExcel, exportToPDF } from '../../ut
 import type { Order, LaundryShop } from '../../types';
 
 const ORDER_STATUSES = [
-  'New Order', 'Pickup Scheduled', 'Picked Up', 'Processing',
-  'Washing', 'Dry Cleaning', 'Ironing', 'Ready For Delivery',
-  'Out For Delivery', 'Delivered', 'Cancelled',
+  'New Order', 'Picked Up', 'Laundry', 'Ready For Delivery',
+  'Out For Delivery', 'Delivered',
 ];
 const PAYMENT_STATUSES = ['Pending', 'Paid', 'Partially Paid'];
 
 const statusColors: Record<string, 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning'> = {
-  'New Order': 'info', 'Pickup Scheduled': 'primary', 'Picked Up': 'secondary',
-  Processing: 'warning', Washing: 'warning', 'Dry Cleaning': 'warning', Ironing: 'warning',
-  'Ready For Delivery': 'primary', 'Out For Delivery': 'secondary', Delivered: 'success', Cancelled: 'error',
+  'New Order': 'info', 'Picked Up': 'secondary',
+  Laundry: 'warning', 'Ready For Delivery': 'primary',
+  'Out For Delivery': 'secondary', Delivered: 'success',
 };
 const paymentColors: Record<string, 'default' | 'success' | 'warning' | 'error'> = {
   Paid: 'success', Pending: 'warning', 'Partially Paid': 'error',
