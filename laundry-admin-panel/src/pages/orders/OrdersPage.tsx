@@ -264,6 +264,42 @@ const OrdersPage: React.FC = () => {
               </Grid>
               <Grid size={{ xs: 12 }}>
                 <Divider sx={{ my: 1 }} />
+                <Typography sx={{ fontWeight: 700, mb: 1 }}>Schedule & Instructions</Typography>
+                <Grid container spacing={2}>
+                  <Grid size={{ xs: 12, sm: 4 }}>
+                    <Typography variant="caption" color="text.secondary">Scheduled Pickup</Typography>
+                    <Typography sx={{ fontWeight: 700 }}>
+                      {selectedOrder.pickupDate ? formatDate(selectedOrder.pickupDate) : 'Not scheduled'}
+                    </Typography>
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 4 }}>
+                    <Typography variant="caption" color="text.secondary">Selected Time Slot</Typography>
+                    <Typography sx={{ fontWeight: 700 }}>
+                      {selectedOrder.notes?.includes('Slot:') 
+                        ? selectedOrder.notes.split('|').find(p => p.includes('Slot:'))?.replace('Slot:', '').trim()
+                        : selectedOrder.pickupDate 
+                          ? new Date(selectedOrder.pickupDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                          : 'N/A'}
+                    </Typography>
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 4 }}>
+                    <Typography variant="caption" color="text.secondary">Estimated Delivery</Typography>
+                    <Typography sx={{ fontWeight: 700 }}>
+                      {selectedOrder.deliveryDate ? formatDate(selectedOrder.deliveryDate) : 'Not scheduled'}
+                    </Typography>
+                  </Grid>
+                  <Grid size={{ xs: 12 }}>
+                    <Typography variant="caption" color="text.secondary">Customer Instructions & Order Info</Typography>
+                    <Box sx={{ p: 1.5, bgcolor: 'action.hover', borderRadius: 1, border: '1px solid', borderColor: 'divider', mt: 0.5 }}>
+                      <Typography variant="body2" sx={{ whiteSpace: 'pre-line', fontStyle: selectedOrder.notes ? 'normal' : 'italic' }}>
+                        {selectedOrder.notes ? selectedOrder.notes.split('|').map(p => p.trim()).join('\n') : 'No notes or instructions provided.'}
+                      </Typography>
+                    </Box>
+                  </Grid>
+                </Grid>
+              </Grid>
+              <Grid size={{ xs: 12 }}>
+                <Divider sx={{ my: 1 }} />
                 <Typography sx={{ fontWeight: 700, mb: 1 }}>Order Activity Timeline</Typography>
                 {selectedOrder.statusHistory && selectedOrder.statusHistory.length > 0 ? (
                   <Stack spacing={1} sx={{ pl: 1, mb: 2 }}>
