@@ -17,21 +17,24 @@ import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import StoreIcon from '@mui/icons-material/Store';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import DeliveryDiningIcon from '@mui/icons-material/DeliveryDining';
 import PageHeader from '../../components/PageHeader';
 import { getOrders, updateOrderStatus, updatePaymentStatus, bulkAssignOrdersToShop } from '../../api/orders';
 import { getLaundryShops } from '../../api/laundryShops';
-import { formatCurrency, formatDate, exportToExcel, exportToPDF } from '../../utils/export';
-import type { Order, LaundryShop } from '../../types';
+import { getEmployees } from '../../api/employees';
+import { formatCurrency, formatDate, formatDateTime, exportToExcel, exportToPDF } from '../../utils/export';
+import type { Order, LaundryShop, Employee } from '../../types';
+import api from '../../api/axios';
 
 const ORDER_STATUSES = [
-  'New Order', 'Picked Up', 'Laundry', 'Ready For Delivery',
+  'New Order', 'Picked Up', 'Laundry',
   'Out For Delivery', 'Delivered',
 ];
 const PAYMENT_STATUSES = ['Pending', 'Paid', 'Partially Paid'];
 
 const statusColors: Record<string, 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning'> = {
   'New Order': 'info', 'Picked Up': 'secondary',
-  Laundry: 'warning', 'Ready For Delivery': 'primary',
+  Laundry: 'warning',
   'Out For Delivery': 'secondary', Delivered: 'success',
 };
 const paymentColors: Record<string, 'default' | 'success' | 'warning' | 'error'> = {
@@ -51,9 +54,14 @@ const OrdersPage: React.FC = () => {
   const [selectedRowIds, setSelectedRowIds] = useState<GridRowSelectionModel>({ type: 'include', ids: new Set() });
   const [bulkAssignOpen, setBulkAssignOpen] = useState(false);
   const [selectedShopId, setSelectedShopId] = useState<number | null>(null);
+  const [bulkDeliveryOpen, setBulkDeliveryOpen] = useState(false);
+  const [selectedDeliveryBoyId, setSelectedDeliveryBoyId] = useState<number | null>(null);
+  const [bulkDeliveryResult, setBulkDeliveryResult] = useState<{ success: number; failed: number } | null>(null);
 
   const { data: orders = [], isLoading, error } = useQuery({ queryKey: ['orders'], queryFn: getOrders });
   const { data: laundryShops = [] } = useQuery({ queryKey: ['laundry-shops'], queryFn: getLaundryShops });
+  const { data: employees = [] } = useQuery({ queryKey: ['employees'], queryFn: getEmployees });
+  const deliveryBoys = (employees as Employee[]).filter(e => ['DeliveryBoy', 'Employee'].includes(e.role) && e.isActive);
 
   const statusMutation = useMutation({
     mutationFn: ({ id, status }: { id: number; status: string }) => updateOrderStatus(id, status),
@@ -72,6 +80,25 @@ const OrdersPage: React.FC = () => {
       setBulkAssignOpen(false);
       setSelectedRowIds({ type: 'include', ids: new Set() });
       setSelectedShopId(null);
+    },
+  });
+  const bulkDeliveryMutation = useMutation({
+    mutationFn: async ({ orderIds, empId }: { orderIds: number[]; empId: number }) => {
+      let success = 0; let failed = 0;
+      for (const orderId of orderIds) {
+        try {
+          await api.post('/deliveries', { orderId, deliveryEmployeeId: empId });
+          success++;
+        } catch { failed++; }
+      }
+      return { success, failed };
+    },
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: ['orders'] });
+      setBulkDeliveryOpen(false);
+      setSelectedRowIds({ type: 'include', ids: new Set() });
+      setSelectedDeliveryBoyId(null);
+      setBulkDeliveryResult(result);
     },
   });
 
@@ -179,6 +206,15 @@ const OrdersPage: React.FC = () => {
               onClick={() => setBulkAssignOpen(true)}
             >
               Assign to Laundry Shop
+            </Button>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<DeliveryDiningIcon />}
+              onClick={() => setBulkDeliveryOpen(true)}
+              sx={{ borderColor: '#F59E0B', color: '#D97706', '&:hover': { bgcolor: '#FFFBEB' } }}
+            >
+              Assign to Delivery Boy
             </Button>
             <Button size="small" onClick={() => setSelectedRowIds({ type: 'include', ids: new Set() })}>Clear Selection</Button>
           </CardContent>
@@ -311,7 +347,7 @@ const OrdersPage: React.FC = () => {
                           mr: 1.5
                         }} />
                         <Typography variant="body2" sx={{ fontWeight: idx === selectedOrder.statusHistory!.length - 1 ? 700 : 400, fontSize: 13 }}>
-                          {history.status} — <span style={{ color: 'gray', fontSize: 11 }}>{formatDate(history.createdDate)}</span>
+                          {history.status} — <span style={{ color: 'gray', fontSize: 11 }}>{formatDateTime(history.createdDate)}</span>
                         </Typography>
                       </Box>
                     ))}
@@ -461,6 +497,89 @@ const OrdersPage: React.FC = () => {
           >
             {bulkAssignMutation.isPending ? 'Assigning...' : `Assign ${selectedRowIds.ids.size} Order${selectedRowIds.ids.size !== 1 ? 's' : ''}`}
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ---- Bulk Assign Delivery Boy Dialog ---- */}
+      <Dialog open={bulkDeliveryOpen} onClose={() => { setBulkDeliveryOpen(false); setSelectedDeliveryBoyId(null); }} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <DeliveryDiningIcon sx={{ color: '#F59E0B' }} />
+            <Box>
+              <Typography sx={{ fontWeight: 700 }}>Assign to Delivery Boy</Typography>
+              <Typography variant="caption" color="text.secondary">
+                {selectedRowIds.ids.size} order{selectedRowIds.ids.size !== 1 ? 's' : ''} will be assigned for delivery
+              </Typography>
+            </Box>
+          </Box>
+        </DialogTitle>
+        <DialogContent dividers>
+          {deliveryBoys.length === 0 ? (
+            <Alert severity="warning">No active Delivery Boys found. Go to Employees and add one with role 'DeliveryBoy'.</Alert>
+          ) : (
+            <List disablePadding>
+              {deliveryBoys.map((emp) => (
+                <ListItemButton
+                  key={emp.id}
+                  selected={selectedDeliveryBoyId === emp.id}
+                  onClick={() => setSelectedDeliveryBoyId(emp.id)}
+                  sx={{ borderRadius: 2, mb: 1, border: (t) => selectedDeliveryBoyId === emp.id ? `2px solid ${t.palette.primary.main}` : '2px solid transparent' }}
+                >
+                  <ListItemAvatar>
+                    <Avatar sx={{ bgcolor: '#F59E0B', fontWeight: 700, fontSize: 14 }}>
+                      {emp.fullName.charAt(0)}
+                    </Avatar>
+                  </ListItemAvatar>
+                  <ListItemText
+                    primary={<Typography sx={{ fontWeight: 700, fontSize: 14 }}>{emp.fullName}</Typography>}
+                    secondary={
+                      <Typography variant="caption" color="text.secondary">
+                        {emp.employeeCode} · {emp.mobileNumber} · <Chip label={emp.role} size="small" color="warning" sx={{ fontSize: 9, height: 16 }} />
+                      </Typography>
+                    }
+                  />
+                  {selectedDeliveryBoyId === emp.id && <CheckCircleIcon color="primary" />}
+                </ListItemButton>
+              ))}
+            </List>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => { setBulkDeliveryOpen(false); setSelectedDeliveryBoyId(null); }}>Cancel</Button>
+          <Button
+            variant="contained"
+            disabled={!selectedDeliveryBoyId || bulkDeliveryMutation.isPending}
+            startIcon={bulkDeliveryMutation.isPending ? <CircularProgress size={16} color="inherit" /> : <DeliveryDiningIcon />}
+            sx={{ bgcolor: '#F59E0B', '&:hover': { bgcolor: '#D97706' } }}
+            onClick={() => {
+              if (selectedDeliveryBoyId) {
+                bulkDeliveryMutation.mutate({ orderIds: Array.from(selectedRowIds.ids) as number[], empId: selectedDeliveryBoyId });
+              }
+            }}
+          >
+            {bulkDeliveryMutation.isPending ? 'Assigning...' : `Assign ${selectedRowIds.ids.size} Order${selectedRowIds.ids.size !== 1 ? 's' : ''}`}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ---- Bulk Delivery Result Dialog ---- */}
+      <Dialog open={!!bulkDeliveryResult} onClose={() => setBulkDeliveryResult(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Assignment Result</DialogTitle>
+        <DialogContent>
+          {bulkDeliveryResult && (
+            <Box sx={{ textAlign: 'center', py: 2 }}>
+              <Typography sx={{ fontSize: 32, mb: 1 }}>{bulkDeliveryResult.failed === 0 ? '✅' : '⚠️'}</Typography>
+              <Typography sx={{ fontWeight: 700, fontSize: 18, mb: 1 }}>
+                {bulkDeliveryResult.success} order{bulkDeliveryResult.success !== 1 ? 's' : ''} assigned!
+              </Typography>
+              {bulkDeliveryResult.failed > 0 && (
+                <Typography color="error">{bulkDeliveryResult.failed} order(s) failed (may already have a delivery)</Typography>
+              )}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button variant="contained" onClick={() => setBulkDeliveryResult(null)}>OK</Button>
         </DialogActions>
       </Dialog>
     </Box>

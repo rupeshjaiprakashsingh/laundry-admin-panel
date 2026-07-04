@@ -27,7 +27,7 @@ import { formatDate, formatCurrency } from '../../utils/export';
 const statusColors: Record<string, 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning'> = {
   'New Order': 'info', 'Pickup Scheduled': 'primary', 'Picked Up': 'secondary',
   Processing: 'warning', Washing: 'warning', 'Dry Cleaning': 'warning', Ironing: 'warning',
-  'Ready For Delivery': 'primary', 'Out For Delivery': 'secondary', Delivered: 'success', Cancelled: 'error',
+  'Out For Delivery': 'secondary', Delivered: 'success', Cancelled: 'error',
 };
 
 const emptyForm: Partial<LaundryShop> = {

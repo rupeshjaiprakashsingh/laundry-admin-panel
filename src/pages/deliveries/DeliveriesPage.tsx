@@ -176,7 +176,7 @@ const DeliveriesPage: React.FC = () => {
   // Orders ready for delivery but NOT yet assigned
   const unassignedReadyOrders = useMemo(() =>
     (orders as Order[]).filter(o =>
-      (o.orderStatus === 'Ready For Delivery' || o.orderStatus === 'Laundry') &&
+      o.orderStatus === 'Laundry' &&
       (!o.deliveries || o.deliveries.length === 0)
     ), [orders]);
 
@@ -367,7 +367,7 @@ const DeliveriesPage: React.FC = () => {
             ) : (
               <Stack spacing={1.5}>
                 <Alert severity="info">
-                  These orders are <strong>Ready For Delivery</strong> but have no delivery boy assigned yet. Click <strong>Assign</strong> to assign one.
+                  These orders are processed in <strong>Laundry</strong> but have no delivery boy assigned yet. Click <strong>Assign</strong> to assign one.
                 </Alert>
                 {unassignedReadyOrders.map((order) => (
                   <Card key={order.id} elevation={0} sx={{ border: '1.5px solid #FDE68A', borderRadius: 2, bgcolor: '#FFFBEB' }}>
