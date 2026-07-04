@@ -20,7 +20,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import PageHeader from '../../components/PageHeader';
 import { getOrders, updateOrderStatus, updatePaymentStatus, bulkAssignOrdersToShop } from '../../api/orders';
 import { getLaundryShops } from '../../api/laundryShops';
-import { formatCurrency, formatDate, exportToExcel, exportToPDF } from '../../utils/export';
+import { formatCurrency, formatDate, formatDateTime, exportToExcel, exportToPDF } from '../../utils/export';
 import type { Order, LaundryShop } from '../../types';
 
 const ORDER_STATUSES = [
@@ -311,7 +311,7 @@ const OrdersPage: React.FC = () => {
                           mr: 1.5
                         }} />
                         <Typography variant="body2" sx={{ fontWeight: idx === selectedOrder.statusHistory!.length - 1 ? 700 : 400, fontSize: 13 }}>
-                          {history.status} — <span style={{ color: 'gray', fontSize: 11 }}>{formatDate(history.createdDate)}</span>
+                          {history.status} — <span style={{ color: 'gray', fontSize: 11 }}>{formatDateTime(history.createdDate)}</span>
                         </Typography>
                       </Box>
                     ))}
