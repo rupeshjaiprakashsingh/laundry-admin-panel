@@ -17,7 +17,7 @@ import DirectionsIcon from '@mui/icons-material/Directions';
 import DirectionsBikeIcon from '@mui/icons-material/DirectionsBike';
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 import PersonIcon from '@mui/icons-material/Person';
-import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutlined';
 import CancelOutlinedIcon from '@mui/icons-material/CancelOutlined';
 import WaterDropIcon from '@mui/icons-material/WaterDrop';
 import LogoutIcon from '@mui/icons-material/Logout';
@@ -27,7 +27,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import LocalLaundryServiceIcon from '@mui/icons-material/LocalLaundryService';
 import AssignmentTurnedInIcon from '@mui/icons-material/AssignmentTurnedIn';
-import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutlined';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
@@ -303,7 +303,7 @@ const PickupCard: React.FC<{
       </Card>
 
       {/* Confirm Dialog */}
-      <Dialog open={!!confirmDialog} onClose={() => setConfirmDialog(null)} maxWidth="xs" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
+      <Dialog open={!!confirmDialog} onClose={() => setConfirmDialog(null)} maxWidth="xs" fullWidth>
         <DialogTitle sx={{ fontWeight: 800, pb: 0.5 }}>
           {confirmDialog?.label}
         </DialogTitle>
@@ -557,7 +557,7 @@ const DeliveryCard: React.FC<{
       </Card>
 
       {/* Confirm Dialog */}
-      <Dialog open={!!confirmDialog} onClose={() => setConfirmDialog(null)} maxWidth="xs" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
+      <Dialog open={!!confirmDialog} onClose={() => setConfirmDialog(null)} maxWidth="xs" fullWidth>
         <DialogTitle sx={{ fontWeight: 800, pb: 0.5 }}>
           {confirmDialog?.label}
         </DialogTitle>

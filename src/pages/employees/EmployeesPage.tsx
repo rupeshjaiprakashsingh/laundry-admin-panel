@@ -44,6 +44,7 @@ const EmployeesPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('All');
   const [createOpen, setCreateOpen] = useState(false);
+  const [defaultRole, setDefaultRole] = useState<'Employee' | 'DeliveryBoy'>('Employee');
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [editEmployee, setEditEmployee] = useState<Employee | null>(null);
 
@@ -54,6 +55,12 @@ const EmployeesPage: React.FC = () => {
     mutationFn: (data: CreateForm) => registerEmployee(data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['employees'] }); setCreateOpen(false); reset(); },
   });
+
+  const openCreateDialog = (role: 'Employee' | 'DeliveryBoy' = 'Employee') => {
+    setDefaultRole(role);
+    reset({ role });
+    setCreateOpen(true);
+  };
   const deleteMutation = useMutation({
     mutationFn: (id: number) => deleteEmployee(id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['employees'] }); setDeleteId(null); },
@@ -111,7 +118,8 @@ const EmployeesPage: React.FC = () => {
         title="Employee Management"
         subtitle={`${filtered.length} employees`}
         breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Employees' }]}
-        action={isSuperAdmin ? { label: 'Add Employee', icon: <AddIcon />, onClick: () => setCreateOpen(true) } : undefined}
+        action={isSuperAdmin ? { label: 'Add Employee', icon: <AddIcon />, onClick: () => openCreateDialog('Employee') } : undefined}
+        secondaryAction={isSuperAdmin ? { label: '🛵 Add Delivery Boy', icon: <AddIcon />, onClick: () => openCreateDialog('DeliveryBoy') } : undefined}
       />
 
       <Card sx={{ mb: 2 }}>
@@ -142,7 +150,11 @@ const EmployeesPage: React.FC = () => {
 
       {/* Create Employee Dialog */}
       <Dialog open={createOpen} onClose={() => setCreateOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle><Typography sx={{ fontWeight: 700 }}>Add New Employee</Typography></DialogTitle>
+        <DialogTitle>
+          <Typography sx={{ fontWeight: 700 }}>
+            {defaultRole === 'DeliveryBoy' ? '🛵 Add New Delivery Boy' : 'Add New Employee'}
+          </Typography>
+        </DialogTitle>
         <form onSubmit={handleSubmit((data) => createMutation.mutate(data))}>
           <DialogContent>
             <Grid container spacing={2} sx={{ mt: 0.5 }}>
