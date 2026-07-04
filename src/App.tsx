@@ -20,6 +20,7 @@ import ReportsPage from './pages/reports/ReportsPage';
 import SettingsPage from './pages/settings/SettingsPage';
 import LaundryShopsPage from './pages/laundry-shops/LaundryShopsPage';
 import CouponsPage from './pages/coupons/CouponsPage';
+import DeliveryBoyPage from './pages/delivery-boy/DeliveryBoyPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -27,10 +28,32 @@ const queryClient = new QueryClient({
   },
 });
 
-// Guard: redirect to login if not authenticated
+// Guard: redirect to login if no token present
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const token = localStorage.getItem('accessToken');
   if (!token) return <Navigate to="/login" replace />;
+  return <>{children}</>;
+}
+
+// Guard: redirect DeliveryBoy to their own portal; block them from admin routes
+function RequireAdmin({ children }: { children: React.ReactNode }) {
+  try {
+    const user = JSON.parse(localStorage.getItem('user') || 'null');
+    if (user?.role === 'DeliveryBoy') return <Navigate to="/delivery-portal" replace />;
+  } catch {
+    // ignore parse error
+  }
+  return <>{children}</>;
+}
+
+// Guard: only allow DeliveryBoy; redirect others to admin dashboard
+function RequireDeliveryBoy({ children }: { children: React.ReactNode }) {
+  try {
+    const user = JSON.parse(localStorage.getItem('user') || 'null');
+    if (user?.role !== 'DeliveryBoy') return <Navigate to="/dashboard" replace />;
+  } catch {
+    return <Navigate to="/dashboard" replace />;
+  }
   return <>{children}</>;
 }
 
@@ -53,11 +76,28 @@ function AppContent() {
       <CssBaseline />
       <BrowserRouter basename="/admin">
         <Routes>
+          {/* Public */}
           <Route path="/login" element={<LoginPage />} />
+
+          {/* Delivery Boy Portal — completely separate experience */}
+          <Route
+            path="/delivery-portal"
+            element={
+              <RequireAuth>
+                <RequireDeliveryBoy>
+                  <DeliveryBoyPage />
+                </RequireDeliveryBoy>
+              </RequireAuth>
+            }
+          />
+
+          {/* Admin Panel — blocked for DeliveryBoy role */}
           <Route
             element={
               <RequireAuth>
-                <AdminLayout onToggleTheme={toggleTheme} isDark={isDark} />
+                <RequireAdmin>
+                  <AdminLayout onToggleTheme={toggleTheme} isDark={isDark} />
+                </RequireAdmin>
               </RequireAuth>
             }
           >
@@ -76,6 +116,8 @@ function AppContent() {
             <Route path="/laundry-shops" element={<LaundryShopsPage />} />
             <Route path="/coupons" element={<CouponsPage />} />
           </Route>
+
+          {/* Catch-all */}
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </BrowserRouter>
