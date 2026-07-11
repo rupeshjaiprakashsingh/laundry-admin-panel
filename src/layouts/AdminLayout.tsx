@@ -52,7 +52,7 @@ const navItems: NavItem[] = [
   { label: 'Services', icon: <LocalLaundryServiceIcon />, path: '/services', roles: ['SuperAdmin'] },
   { label: 'Pricing', icon: <AttachMoneyIcon />, path: '/pricing', roles: ['SuperAdmin'] },
   { label: 'Coupons', icon: <LocalOfferIcon />, path: '/coupons', roles: ['SuperAdmin'] },
-  { label: 'Banners', icon: <ViewCarouselIcon />, path: '/banners', roles: ['SuperAdmin'] },
+  { label: 'Banners', icon: <ViewCarouselIcon />, path: '/banners', roles: ['SuperAdmin', 'BranchManager'] },
   { label: 'Pickups', icon: <LocalShippingIcon />, path: '/pickups' },
   { label: 'Deliveries', icon: <DeliveryDiningIcon />, path: '/deliveries' },
   { label: 'Laundry Shops', icon: <StoreIcon />, path: '/laundry-shops', roles: ['SuperAdmin', 'BranchManager', 'Employee'] },
