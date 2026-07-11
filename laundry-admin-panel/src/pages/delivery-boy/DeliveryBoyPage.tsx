@@ -789,9 +789,17 @@ const DeliveryBoyPage: React.FC = () => {
   } = useQuery({ queryKey: ['my-deliveries'], queryFn: getMyDeliveries });
 
   const deliveries = useMemo(() => {
-    return (rawDeliveries as any[]).filter(d =>
+    const filtered = (rawDeliveries as any[]).filter(d =>
       d.order && ['Laundry', 'Out For Delivery', 'Delivered'].includes(d.order.orderStatus)
     );
+    const latestMap = new Map<number, any>();
+    for (const d of filtered) {
+      const existing = latestMap.get(d.orderId);
+      if (!existing || d.id > existing.id) {
+        latestMap.set(d.orderId, d);
+      }
+    }
+    return Array.from(latestMap.values());
   }, [rawDeliveries]);
 
   // Mutations

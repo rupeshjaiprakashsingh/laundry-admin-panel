@@ -161,17 +161,20 @@ const DeliveriesPage: React.FC = () => {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['orders'] }); setStatusDialog(null); },
   });
 
-  // Flatten deliveries from orders
+  // Flatten deliveries from orders, keeping only the latest delivery for each order to avoid duplicates in the UI
   const allDeliveries = useMemo(() =>
-    (orders as Order[]).flatMap((o) =>
-      (o.deliveries ?? []).map((d: Delivery) => ({
+    (orders as Order[]).flatMap((o) => {
+      if (!o.deliveries || o.deliveries.length === 0) return [];
+      const sorted = [...o.deliveries].sort((a, b) => b.id - a.id);
+      const d = sorted[0];
+      return [{
         ...d,
         id: d.id,
         orderNumber: o.orderNumber,
         customer: o.customer,
         orderId: o.id,
-      }))
-    ), [orders]);
+      }];
+    }), [orders]);
 
   // Orders ready for delivery but NOT yet assigned
   const unassignedReadyOrders = useMemo(() =>
