@@ -30,6 +30,7 @@ export interface Customer {
   dob?: string;
   isActive: boolean;
   createdDate: string;
+  addresses?: Address[];
 }
 
 export interface Branch {
@@ -146,6 +147,31 @@ export interface Order {
   payments?: Payment[];
   deliveries?: Delivery[];
   statusHistory?: OrderStatusHistory[];
+
+  addressTitle?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
+  landmark?: string;
+  houseDetails?: string;
+}
+
+export interface Address {
+  id: number;
+  customerId: number;
+  title: string;
+  address: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
+  landmark?: string;
+  houseDetails?: string;
+  lat?: number;
+  lng?: number;
+  isDefault: boolean;
+  createdDate: string;
+  updatedDate: string;
 }
 
 export interface PickupRequest {
@@ -203,6 +229,14 @@ export interface Coupon {
   code: string;
   discount: number;
   description?: string;
+  isActive: boolean;
+  createdDate: string;
+}
+
+export interface Banner {
+  id: number;
+  title: string;
+  imageUrl: string;
   isActive: boolean;
   createdDate: string;
 }

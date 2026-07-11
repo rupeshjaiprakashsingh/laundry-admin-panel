@@ -262,11 +262,13 @@ const OrdersPage: React.FC = () => {
                 <Typography variant="caption" color="text.secondary">Customer</Typography>
                 <Typography sx={{ fontWeight: 700 }}>{selectedOrder.customer?.firstName} {selectedOrder.customer?.lastName}</Typography>
                 <Typography variant="body2" color="text.secondary">{selectedOrder.customer?.mobileNumber}</Typography>
-                {selectedOrder.customer && (
+                {(selectedOrder.address || selectedOrder.customer) && (
                   <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, fontStyle: 'italic', fontSize: 12 }}>
-                    📍 {selectedOrder.customer.houseDetails ? `${selectedOrder.customer.houseDetails}, ` : ''}
-                    {selectedOrder.customer.landmark ? `${selectedOrder.customer.landmark}, ` : ''}
-                    {selectedOrder.customer.address}, {selectedOrder.customer.city}, {selectedOrder.customer.state} - {selectedOrder.customer.pincode}
+                    📍 {selectedOrder.addressTitle ? `[${selectedOrder.addressTitle}] ` : ''}
+                    {selectedOrder.address 
+                      ? `${selectedOrder.houseDetails ? `${selectedOrder.houseDetails}, ` : ''}${selectedOrder.landmark ? `${selectedOrder.landmark}, ` : ''}${selectedOrder.address}, ${selectedOrder.city || ''}, ${selectedOrder.state || ''}${selectedOrder.pincode ? ` - ${selectedOrder.pincode}` : ''}`
+                      : `${selectedOrder.customer?.houseDetails ? `${selectedOrder.customer.houseDetails}, ` : ''}${selectedOrder.customer?.landmark ? `${selectedOrder.customer.landmark}, ` : ''}${selectedOrder.customer?.address || ''}, ${selectedOrder.customer?.city || ''}, ${selectedOrder.customer?.state || ''}${selectedOrder.customer?.pincode ? ` - ${selectedOrder.customer.pincode}` : ''}`
+                    }
                   </Typography>
                 )}
               </Grid>

@@ -1002,19 +1002,21 @@ const DeliveryBoyPage: React.FC = () => {
                 '&.Mui-focused fieldset': { borderColor: '#6366F1' },
               },
             }}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon sx={{ color: '#9CA3AF', fontSize: 18 }} />
-                </InputAdornment>
-              ),
-              endAdornment: searchQuery && (
-                <InputAdornment position="end">
-                  <IconButton size="small" onClick={() => setSearchQuery('')} sx={{ p: 0.25 }}>
-                    <ClearIcon sx={{ fontSize: 14 }} />
-                  </IconButton>
-                </InputAdornment>
-              )
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon sx={{ color: '#9CA3AF', fontSize: 18 }} />
+                  </InputAdornment>
+                ),
+                endAdornment: searchQuery ? (
+                  <InputAdornment position="end">
+                    <IconButton size="small" onClick={() => setSearchQuery('')} sx={{ p: 0.25 }}>
+                      <ClearIcon sx={{ fontSize: 14 }} />
+                    </IconButton>
+                  </InputAdornment>
+                ) : null
+              }
             }}
           />
         )}

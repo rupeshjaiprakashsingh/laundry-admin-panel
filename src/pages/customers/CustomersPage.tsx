@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import {
   Box, Card, TextField, Chip, Typography, IconButton, Tooltip, Grid,
   Dialog, DialogTitle, DialogContent, DialogActions, Button,
-  Alert, Stack, InputAdornment,
+  Alert, Stack, InputAdornment, Divider,
 } from '@mui/material';
 import { DataGrid, type GridColDef } from '@mui/x-data-grid';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -117,6 +117,35 @@ const CustomersPage: React.FC = () => {
                   <Typography sx={{ fontWeight: 600, fontSize: 14 }}>{value as string}</Typography>
                 </Grid>
               ))}
+
+              {viewCustomer.addresses && viewCustomer.addresses.length > 0 && (
+                <Grid size={{ xs: 12 }}>
+                  <Divider sx={{ my: 2 }} />
+                  <Typography sx={{ fontWeight: 700, mb: 1 }}>Saved Addresses ({viewCustomer.addresses.length})</Typography>
+                  <Stack spacing={1.5}>
+                    {viewCustomer.addresses.map((addr) => (
+                      <Box key={addr.id} sx={{ p: 1.5, bgcolor: 'action.hover', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                          <Typography sx={{ fontWeight: 700, fontSize: 13, color: 'primary.main' }}>
+                            {addr.title}
+                          </Typography>
+                          {addr.isDefault && (
+                            <Chip label="Default" size="small" color="success" sx={{ fontSize: 9, height: 16 }} />
+                          )}
+                        </Box>
+                        <Typography sx={{ fontSize: 12, fontWeight: 500 }}>
+                          {addr.houseDetails ? `${addr.houseDetails}, ` : ''}
+                          {addr.landmark ? `(Landmark: ${addr.landmark}), ` : ''}
+                          {addr.address}
+                        </Typography>
+                        <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>
+                          {addr.city}, {addr.state} - {addr.pincode}
+                        </Typography>
+                      </Box>
+                    ))}
+                  </Stack>
+                </Grid>
+              )}
             </Grid>
           )}
         </DialogContent>

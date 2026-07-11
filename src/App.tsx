@@ -21,6 +21,7 @@ import SettingsPage from './pages/settings/SettingsPage';
 import LaundryShopsPage from './pages/laundry-shops/LaundryShopsPage';
 import CouponsPage from './pages/coupons/CouponsPage';
 import DeliveryBoyPage from './pages/delivery-boy/DeliveryBoyPage';
+import BannersPage from './pages/banners/BannersPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -115,6 +116,7 @@ function AppContent() {
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/laundry-shops" element={<LaundryShopsPage />} />
             <Route path="/coupons" element={<CouponsPage />} />
+            <Route path="/banners" element={<BannersPage />} />
           </Route>
 
           {/* Catch-all */}
