@@ -19,6 +19,16 @@ export interface OrderItemInfo {
   service?: { serviceName: string };
 }
 
+export interface LaundryShopInfo {
+  id: number;
+  shopName: string;
+  shopCode?: string;
+  contactNumber?: string;
+  address?: string;
+  city?: string;
+  pincode?: string;
+}
+
 export interface OrderInfo {
   id: number;
   orderNumber: string;
@@ -26,6 +36,7 @@ export interface OrderInfo {
   orderItems?: OrderItemInfo[];
   netAmount?: number;
   paymentStatus?: string;
+  laundryShop?: LaundryShopInfo;
 }
 
 export interface DeliveryAssignment {
@@ -45,6 +56,11 @@ export interface PickupAssignment {
   pickupDate: string;
   pickupTime: string;
   status: string; // Pending | Assigned | Completed | Cancelled
+  order?: {
+    id: number;
+    orderNumber: string;
+    laundryShop?: LaundryShopInfo;
+  } | null;
 }
 
 // ── API calls ──────────────────────────────────────────────────

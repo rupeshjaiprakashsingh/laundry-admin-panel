@@ -237,6 +237,62 @@ const PickupCard: React.FC<{
               </Box>
             </Box>
 
+            {/* Drop Off Laundry Shop Info */}
+            {pickup.order?.laundryShop && (
+              <Box
+                sx={{
+                  mt: 1.5, mb: 1.5, px: 1.5, py: 1.25,
+                  bgcolor: '#ECFDF5', borderRadius: 2,
+                  border: '1.5px dashed #10B981',
+                }}
+              >
+                <Typography sx={{ fontSize: 10, fontWeight: 700, color: '#047857', mb: 0.5, textTransform: 'uppercase', letterSpacing: 0.5, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  🏪 Drop Clothes to Laundry
+                </Typography>
+                <Typography sx={{ fontSize: 13, fontWeight: 800, color: '#065F46' }}>
+                  {pickup.order.laundryShop.shopName}
+                </Typography>
+                <Typography sx={{ fontSize: 11, color: '#047857', mt: 0.25 }}>
+                  📍 {[pickup.order.laundryShop.address, pickup.order.laundryShop.city, pickup.order.laundryShop.pincode].filter(Boolean).join(', ')}
+                </Typography>
+                {pickup.order.laundryShop.contactNumber && (
+                  <Button
+                    size="small"
+                    variant="text"
+                    startIcon={<PhoneIcon sx={{ fontSize: '12px !important' }} />}
+                    onClick={() => openPhone(pickup.order.laundryShop.contactNumber)}
+                    sx={{
+                      p: 0, mt: 0.75, fontSize: 11, fontWeight: 700, color: '#059669',
+                      textTransform: 'none', minWidth: 0,
+                      '&:hover': { color: '#047857', bgcolor: 'transparent' }
+                    }}
+                  >
+                    Call Shop: {pickup.order.laundryShop.contactNumber}
+                  </Button>
+                )}
+              </Box>
+            )}
+
+            {pickup.order && !pickup.order.laundryShop && (
+              <Box
+                sx={{
+                  mt: 1.5, mb: 1.5, px: 1.5, py: 1.25,
+                  bgcolor: '#FFFBEB', borderRadius: 2,
+                  border: '1.5px dashed #F59E0B',
+                }}
+              >
+                <Typography sx={{ fontSize: 10, fontWeight: 700, color: '#B45309', mb: 0.5, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  🏪 Drop Clothes to Laundry
+                </Typography>
+                <Typography sx={{ fontSize: 12, fontWeight: 700, color: '#92400E' }}>
+                  ⚠️ No Laundry Shop Assigned yet
+                </Typography>
+                <Typography sx={{ fontSize: 11, color: '#B45309', mt: 0.25 }}>
+                  You will select the shop when marking the clothes as Picked Up.
+                </Typography>
+              </Box>
+            )}
+
             {/* Action Buttons Row */}
             <Box sx={{ display: 'flex', gap: 1, mb: 1.5 }}>
               <Button
@@ -566,6 +622,42 @@ const DeliveryCard: React.FC<{
                   Payment: {delivery.order.paymentStatus}
                   {delivery.order.netAmount ? ` — ₹${delivery.order.netAmount.toFixed(0)}` : ''}
                 </Typography>
+              </Box>
+            )}
+
+            {/* Collection Laundry Shop Info */}
+            {delivery.order?.laundryShop && (
+              <Box
+                sx={{
+                  mb: 1.5, px: 1.5, py: 1.25,
+                  bgcolor: '#EEF2FF', borderRadius: 2,
+                  border: '1.5px dashed #6366F1',
+                }}
+              >
+                <Typography sx={{ fontSize: 10, fontWeight: 700, color: '#4338CA', mb: 0.5, textTransform: 'uppercase', letterSpacing: 0.5, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  🏪 Collect Clothes From
+                </Typography>
+                <Typography sx={{ fontSize: 13, fontWeight: 800, color: '#312E81' }}>
+                  {delivery.order.laundryShop.shopName}
+                </Typography>
+                <Typography sx={{ fontSize: 11, color: '#4338CA', mt: 0.25 }}>
+                  📍 {[delivery.order.laundryShop.address, delivery.order.laundryShop.city, delivery.order.laundryShop.pincode].filter(Boolean).join(', ')}
+                </Typography>
+                {delivery.order.laundryShop.contactNumber && (
+                  <Button
+                    size="small"
+                    variant="text"
+                    startIcon={<PhoneIcon sx={{ fontSize: '12px !important' }} />}
+                    onClick={() => openPhone(delivery.order.laundryShop.contactNumber)}
+                    sx={{
+                      p: 0, mt: 0.75, fontSize: 11, fontWeight: 700, color: '#4F46E5',
+                      textTransform: 'none', minWidth: 0,
+                      '&:hover': { color: '#4338CA', bgcolor: 'transparent' }
+                    }}
+                  >
+                    Call Shop: {delivery.order.laundryShop.contactNumber}
+                  </Button>
+                )}
               </Box>
             )}
 
