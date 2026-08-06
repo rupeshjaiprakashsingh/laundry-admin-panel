@@ -2,7 +2,7 @@ import axios from 'axios';
 import { store } from '../app/store';
 import { logout, setTokens } from '../app/authSlice';
 
-const baseURL = import.meta.env.VITE_API_URL || '/api';
+const baseURL = import.meta.env.VITE_API_URL || 'https://starfish-app-sy95b.ondigitalocean.app/api/v1';
 
 const axiosInstance = axios.create({
   baseURL,
