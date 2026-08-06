@@ -8,7 +8,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'https://veenatinnovations-laundry-api.onrender.com',
+        target: 'https://starfish-app-sy95b.ondigitalocean.app',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, '/api/v1'),
       },

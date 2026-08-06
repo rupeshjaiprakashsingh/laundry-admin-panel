@@ -2,8 +2,10 @@ import axios from 'axios';
 import { store } from '../app/store';
 import { logout, setTokens } from '../app/authSlice';
 
+const baseURL = import.meta.env.VITE_API_URL || '/api';
+
 const axiosInstance = axios.create({
-  baseURL: '/api',
+  baseURL,
   headers: { 'Content-Type': 'application/json' },
   timeout: 15000,
 });
@@ -30,7 +32,8 @@ axiosInstance.interceptors.response.use(
       try {
         const refreshToken = store.getState().auth.refreshToken;
         if (!refreshToken) throw new Error('No refresh token');
-        const { data } = await axios.post('/api/auth/refresh', { refreshToken });
+        const refreshUrl = `${baseURL.replace(/\/$/, '')}/auth/refresh`;
+        const { data } = await axios.post(refreshUrl, { refreshToken });
         store.dispatch(setTokens({ accessToken: data.accessToken, refreshToken: data.refreshToken }));
         originalRequest.headers.Authorization = `Bearer ${data.accessToken}`;
         return axiosInstance(originalRequest);

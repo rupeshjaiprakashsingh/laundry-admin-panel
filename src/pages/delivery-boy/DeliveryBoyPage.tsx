@@ -260,7 +260,7 @@ const PickupCard: React.FC<{
                     size="small"
                     variant="text"
                     startIcon={<PhoneIcon sx={{ fontSize: '12px !important' }} />}
-                    onClick={() => openPhone(pickup.order.laundryShop.contactNumber)}
+                    onClick={() => pickup.order?.laundryShop?.contactNumber && openPhone(pickup.order.laundryShop.contactNumber)}
                     sx={{
                       p: 0, mt: 0.75, fontSize: 11, fontWeight: 700, color: '#059669',
                       textTransform: 'none', minWidth: 0,
@@ -648,7 +648,7 @@ const DeliveryCard: React.FC<{
                     size="small"
                     variant="text"
                     startIcon={<PhoneIcon sx={{ fontSize: '12px !important' }} />}
-                    onClick={() => openPhone(delivery.order.laundryShop.contactNumber)}
+                    onClick={() => delivery.order?.laundryShop?.contactNumber && openPhone(delivery.order.laundryShop.contactNumber)}
                     sx={{
                       p: 0, mt: 0.75, fontSize: 11, fontWeight: 700, color: '#4F46E5',
                       textTransform: 'none', minWidth: 0,

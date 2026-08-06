@@ -4,6 +4,7 @@ import {
   Button, CircularProgress, Snackbar, Alert as MuiAlert,
   Dialog, DialogTitle, DialogContent, DialogActions,
   Badge, Divider, Collapse, Select, MenuItem, FormControl, InputLabel, TextField,
+  Autocomplete, InputAdornment,
 } from '@mui/material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useDispatch } from 'react-redux';
@@ -32,6 +33,8 @@ import ErrorOutlineIcon from '@mui/icons-material/ErrorOutlined';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
+import SearchIcon from '@mui/icons-material/Search';
+import ClearIcon from '@mui/icons-material/Clear';
 
 import {
   getMyDeliveries,
@@ -234,6 +237,62 @@ const PickupCard: React.FC<{
               </Box>
             </Box>
 
+            {/* Drop Off Laundry Shop Info */}
+            {pickup.order?.laundryShop && (
+              <Box
+                sx={{
+                  mt: 1.5, mb: 1.5, px: 1.5, py: 1.25,
+                  bgcolor: '#ECFDF5', borderRadius: 2,
+                  border: '1.5px dashed #10B981',
+                }}
+              >
+                <Typography sx={{ fontSize: 10, fontWeight: 700, color: '#047857', mb: 0.5, textTransform: 'uppercase', letterSpacing: 0.5, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  🏪 Drop Clothes to Laundry
+                </Typography>
+                <Typography sx={{ fontSize: 13, fontWeight: 800, color: '#065F46' }}>
+                  {pickup.order.laundryShop.shopName}
+                </Typography>
+                <Typography sx={{ fontSize: 11, color: '#047857', mt: 0.25 }}>
+                  📍 {[pickup.order.laundryShop.address, pickup.order.laundryShop.city, pickup.order.laundryShop.pincode].filter(Boolean).join(', ')}
+                </Typography>
+                {pickup.order.laundryShop.contactNumber && (
+                  <Button
+                    size="small"
+                    variant="text"
+                    startIcon={<PhoneIcon sx={{ fontSize: '12px !important' }} />}
+                    onClick={() => pickup.order?.laundryShop?.contactNumber && openPhone(pickup.order.laundryShop.contactNumber)}
+                    sx={{
+                      p: 0, mt: 0.75, fontSize: 11, fontWeight: 700, color: '#059669',
+                      textTransform: 'none', minWidth: 0,
+                      '&:hover': { color: '#047857', bgcolor: 'transparent' }
+                    }}
+                  >
+                    Call Shop: {pickup.order.laundryShop.contactNumber}
+                  </Button>
+                )}
+              </Box>
+            )}
+
+            {pickup.order && !pickup.order.laundryShop && (
+              <Box
+                sx={{
+                  mt: 1.5, mb: 1.5, px: 1.5, py: 1.25,
+                  bgcolor: '#FFFBEB', borderRadius: 2,
+                  border: '1.5px dashed #F59E0B',
+                }}
+              >
+                <Typography sx={{ fontSize: 10, fontWeight: 700, color: '#B45309', mb: 0.5, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  🏪 Drop Clothes to Laundry
+                </Typography>
+                <Typography sx={{ fontSize: 12, fontWeight: 700, color: '#92400E' }}>
+                  ⚠️ No Laundry Shop Assigned yet
+                </Typography>
+                <Typography sx={{ fontSize: 11, color: '#B45309', mt: 0.25 }}>
+                  You will select the shop when marking the clothes as Picked Up.
+                </Typography>
+              </Box>
+            )}
+
             {/* Action Buttons Row */}
             <Box sx={{ display: 'flex', gap: 1, mb: 1.5 }}>
               <Button
@@ -352,22 +411,19 @@ const PickupCard: React.FC<{
               <Typography variant="body2" sx={{ fontWeight: 700, mb: 1, color: '#374151' }}>
                 Select Laundry Shop to drop clothes:
               </Typography>
-              <FormControl fullWidth size="small" sx={{ mb: 1.5 }}>
-                <InputLabel id="shop-select-label">Laundry Shop</InputLabel>
-                <Select
-                  labelId="shop-select-label"
-                  value={selectedShopId}
-                  label="Laundry Shop"
-                  onChange={(e) => setSelectedShopId(e.target.value)}
-                >
-                  <MenuItem value="" disabled sx={{ fontWeight: 600 }}>Select a shop</MenuItem>
-                  {laundryShops.map((shop) => (
-                    <MenuItem key={shop.id} value={shop.id}>
-                      {shop.shopName} ({shop.pincode})
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <Autocomplete
+                size="small"
+                options={laundryShops}
+                getOptionLabel={(shop) => `${shop.shopName} (${shop.pincode})`}
+                value={laundryShops.find(s => s.id === Number(selectedShopId)) || null}
+                onChange={(_, newValue) => {
+                  setSelectedShopId(newValue ? newValue.id : '');
+                }}
+                renderInput={(params) => (
+                  <TextField {...params} label="Search & Select Laundry Shop" />
+                )}
+                sx={{ mb: 1.5 }}
+              />
 
               <Box sx={{ textAlign: 'right' }}>
                 <Button
@@ -566,6 +622,42 @@ const DeliveryCard: React.FC<{
                   Payment: {delivery.order.paymentStatus}
                   {delivery.order.netAmount ? ` — ₹${delivery.order.netAmount.toFixed(0)}` : ''}
                 </Typography>
+              </Box>
+            )}
+
+            {/* Collection Laundry Shop Info */}
+            {delivery.order?.laundryShop && (
+              <Box
+                sx={{
+                  mb: 1.5, px: 1.5, py: 1.25,
+                  bgcolor: '#EEF2FF', borderRadius: 2,
+                  border: '1.5px dashed #6366F1',
+                }}
+              >
+                <Typography sx={{ fontSize: 10, fontWeight: 700, color: '#4338CA', mb: 0.5, textTransform: 'uppercase', letterSpacing: 0.5, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  🏪 Collect Clothes From
+                </Typography>
+                <Typography sx={{ fontSize: 13, fontWeight: 800, color: '#312E81' }}>
+                  {delivery.order.laundryShop.shopName}
+                </Typography>
+                <Typography sx={{ fontSize: 11, color: '#4338CA', mt: 0.25 }}>
+                  📍 {[delivery.order.laundryShop.address, delivery.order.laundryShop.city, delivery.order.laundryShop.pincode].filter(Boolean).join(', ')}
+                </Typography>
+                {delivery.order.laundryShop.contactNumber && (
+                  <Button
+                    size="small"
+                    variant="text"
+                    startIcon={<PhoneIcon sx={{ fontSize: '12px !important' }} />}
+                    onClick={() => delivery.order?.laundryShop?.contactNumber && openPhone(delivery.order.laundryShop.contactNumber)}
+                    sx={{
+                      p: 0, mt: 0.75, fontSize: 11, fontWeight: 700, color: '#4F46E5',
+                      textTransform: 'none', minWidth: 0,
+                      '&:hover': { color: '#4338CA', bgcolor: 'transparent' }
+                    }}
+                  >
+                    Call Shop: {delivery.order.laundryShop.contactNumber}
+                  </Button>
+                )}
               </Box>
             )}
 
@@ -772,6 +864,7 @@ const DeliveryBoyPage: React.FC = () => {
   const qc = useQueryClient();
   const [activeTab, setActiveTab] = useState<TabId>('pickups');
   const [toast, setToast] = useState<{ msg: string; severity: 'success' | 'error' } | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Queries
   const { data: laundryShops = [] } = useQuery({ queryKey: ['laundry-shops'], queryFn: getLaundryShops });
@@ -801,6 +894,48 @@ const DeliveryBoyPage: React.FC = () => {
     }
     return Array.from(latestMap.values());
   }, [rawDeliveries]);
+
+  // Filtered lists
+  const filteredPickups = useMemo(() => {
+    if (!searchQuery.trim()) return pickups;
+    const query = searchQuery.toLowerCase().trim();
+    return pickups.filter(p => {
+      const cust = p.customer;
+      const firstName = cust?.firstName?.toLowerCase() || '';
+      const lastName = cust?.lastName?.toLowerCase() || '';
+      const mobile = cust?.mobileNumber || '';
+      const addr = p.pickupAddress?.toLowerCase() || '';
+      const pickupIdStr = String(p.id);
+
+      return firstName.includes(query) ||
+             lastName.includes(query) ||
+             `${firstName} ${lastName}`.includes(query) ||
+             mobile.includes(query) ||
+             addr.includes(query) ||
+             pickupIdStr.includes(query);
+    });
+  }, [pickups, searchQuery]);
+
+  const filteredDeliveries = useMemo(() => {
+    if (!searchQuery.trim()) return deliveries;
+    const query = searchQuery.toLowerCase().trim();
+    return deliveries.filter(d => {
+      const order = d.order;
+      const cust = order?.customer;
+      const firstName = cust?.firstName?.toLowerCase() || '';
+      const lastName = cust?.lastName?.toLowerCase() || '';
+      const mobile = cust?.mobileNumber || '';
+      const orderNum = order?.orderNumber?.toLowerCase() || '';
+      const deliveryIdStr = String(d.id);
+
+      return firstName.includes(query) ||
+             lastName.includes(query) ||
+             `${firstName} ${lastName}`.includes(query) ||
+             mobile.includes(query) ||
+             orderNum.includes(query) ||
+             deliveryIdStr.includes(query);
+    });
+  }, [deliveries, searchQuery]);
 
   // Mutations
   const pickupMutation = useMutation({
@@ -948,6 +1083,44 @@ const DeliveryBoyPage: React.FC = () => {
       {/* ── Content Area ─────────────────────────────────────────────── */}
       <Box sx={{ flex: 1, overflowY: 'auto', px: 2, pt: 2, pb: '90px' }}>
 
+        {/* Search Bar */}
+        {activeTab !== 'profile' && (
+          <TextField
+            fullWidth
+            size="small"
+            placeholder="Search customer, phone, or address..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            sx={{
+              mb: 2,
+              bgcolor: '#fff',
+              borderRadius: 2,
+              '& .MuiOutlinedInput-root': {
+                borderRadius: 2,
+                '& fieldset': { borderColor: '#E5E7EB' },
+                '&:hover fieldset': { borderColor: '#D1D5DB' },
+                '&.Mui-focused fieldset': { borderColor: '#6366F1' },
+              },
+            }}
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon sx={{ color: '#9CA3AF', fontSize: 18 }} />
+                  </InputAdornment>
+                ),
+                endAdornment: searchQuery ? (
+                  <InputAdornment position="end">
+                    <IconButton size="small" onClick={() => setSearchQuery('')} sx={{ p: 0.25 }}>
+                      <ClearIcon sx={{ fontSize: 14 }} />
+                    </IconButton>
+                  </InputAdornment>
+                ) : null
+              }
+            }}
+          />
+        )}
+
         {/* Pickups Tab */}
         {activeTab === 'pickups' && (
           <>
@@ -955,20 +1128,24 @@ const DeliveryBoyPage: React.FC = () => {
               <Typography sx={{ fontWeight: 800, fontSize: 16, color: '#111827' }}>
                 Pickup Assignments
               </Typography>
-              <Chip label={`${pickups.length} total`} size="small" sx={{ bgcolor: '#E0E7FF', color: '#4338CA', fontWeight: 700, fontSize: 10 }} />
+              <Chip
+                label={filteredPickups.length === pickups.length ? `${pickups.length} total` : `${filteredPickups.length} found`}
+                size="small"
+                sx={{ bgcolor: '#E0E7FF', color: '#4338CA', fontWeight: 700, fontSize: 10 }}
+              />
             </Box>
             {pickupsLoading ? (
               <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
                 <CircularProgress sx={{ color: '#6366F1' }} />
               </Box>
-            ) : pickups.length === 0 ? (
+            ) : filteredPickups.length === 0 ? (
               <EmptyState
                 icon={<LocalShippingIcon sx={{ fontSize: 32, color: '#9CA3AF' }} />}
-                title="No Pickups Assigned"
-                subtitle="You have no pickup tasks right now. Check back later or contact your manager."
+                title={searchQuery ? "No Matching Pickups" : "No Pickups Assigned"}
+                subtitle={searchQuery ? "Try refining your search terms." : "You have no pickup tasks right now. Check back later or contact your manager."}
               />
             ) : (
-              pickups.map((pickup) => (
+              filteredPickups.map((pickup) => (
                 <PickupCard
                   key={pickup.id}
                   pickup={pickup}
@@ -988,20 +1165,24 @@ const DeliveryBoyPage: React.FC = () => {
               <Typography sx={{ fontWeight: 800, fontSize: 16, color: '#111827' }}>
                 Delivery Assignments
               </Typography>
-              <Chip label={`${deliveries.length} total`} size="small" sx={{ bgcolor: '#FEF3C7', color: '#92400E', fontWeight: 700, fontSize: 10 }} />
+              <Chip
+                label={filteredDeliveries.length === deliveries.length ? `${deliveries.length} total` : `${filteredDeliveries.length} found`}
+                size="small"
+                sx={{ bgcolor: '#FEF3C7', color: '#92400E', fontWeight: 700, fontSize: 10 }}
+              />
             </Box>
             {deliveriesLoading ? (
               <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
                 <CircularProgress sx={{ color: '#F59E0B' }} />
               </Box>
-            ) : deliveries.length === 0 ? (
+            ) : filteredDeliveries.length === 0 ? (
               <EmptyState
                 icon={<LocalLaundryServiceIcon sx={{ fontSize: 32, color: '#9CA3AF' }} />}
-                title="No Deliveries Assigned"
-                subtitle="No delivery tasks yet. You'll see them here once assigned by admin."
+                title={searchQuery ? "No Matching Deliveries" : "No Deliveries Assigned"}
+                subtitle={searchQuery ? "Try refining your search terms." : "No delivery tasks yet. You'll see them here once assigned by admin."}
               />
             ) : (
-              deliveries.map((delivery) => (
+              filteredDeliveries.map((delivery) => (
                 <DeliveryCard
                   key={delivery.id}
                   delivery={delivery}
