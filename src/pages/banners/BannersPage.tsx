@@ -9,8 +9,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
+import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import PageHeader from '../../components/PageHeader';
-import { getBanners, createBanner, updateBanner, deleteBanner } from '../../api/banners';
+import { getBanners, createBanner, updateBanner, deleteBanner, uploadBannerImage, resolveImageUrl } from '../../api/banners';
 import type { Banner } from '../../types';
 
 const emptyBanner = {
@@ -25,6 +26,7 @@ const BannersPage: React.FC = () => {
   const [editBannerData, setEditBannerData] = useState<Banner | null>(null);
   const [form, setForm] = useState({ ...emptyBanner });
   const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
   const [snack, setSnack] = useState<{ open: boolean; msg: string; severity: 'success' | 'error' }>({ open: false, msg: '', severity: 'success' });
 
   const { data: banners = [], isLoading, error } = useQuery({ queryKey: ['banners'], queryFn: getBanners });
@@ -84,6 +86,31 @@ const BannersPage: React.FC = () => {
     updateMutation.mutate({ id: b.id, data: { isActive: !b.isActive } });
   };
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploading(true);
+    try {
+      const res = await uploadBannerImage(file);
+      if (res?.imageUrl) {
+        setForm((prev) => ({ ...prev, imageUrl: res.imageUrl }));
+        setSnack({ open: true, msg: 'Banner image uploaded successfully!', severity: 'success' });
+      }
+    } catch (err: any) {
+      // Fallback to FileReader data URL if server upload fails
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        if (evt.target?.result) {
+          setForm((prev) => ({ ...prev, imageUrl: evt.target!.result as string }));
+          setSnack({ open: true, msg: 'Banner image converted to base64!', severity: 'success' });
+        }
+      };
+      reader.readAsDataURL(file);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   const handleSubmit = () => {
     if (!form.title.trim() || !form.imageUrl.trim()) return;
     if (editBannerData) {
@@ -121,7 +148,7 @@ const BannersPage: React.FC = () => {
                 <CardMedia
                   component="img"
                   height="160"
-                  image={banner.imageUrl}
+                  image={resolveImageUrl(banner.imageUrl)}
                   alt={banner.title}
                   onError={(e: any) => {
                     e.target.src = 'https://placehold.co/600x300?text=Invalid+Image+URL';
@@ -186,29 +213,46 @@ const BannersPage: React.FC = () => {
               label="Banner Title *"
               value={form.title}
               onChange={(e) => setForm({ ...form, title: e.target.value })}
-              placeholder="e.g. Free Delivery"
+              placeholder="e.g. Free Delivery Offer"
             />
-            <TextField
-              fullWidth
-              size="small"
-              label="Banner Image URL *"
-              value={form.imageUrl}
-              onChange={(e) => setForm({ ...form, imageUrl: e.target.value })}
-              placeholder="e.g. https://images.unsplash.com/photo-1545173168-9f1947eebd01"
-            />
+            
+            <Stack spacing={1}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>Banner Image *</Typography>
+              <Stack direction="row" spacing={2} alignItems="center">
+                <Button
+                  variant="outlined"
+                  component="label"
+                  startIcon={isUploading ? <CircularProgress size={18} color="inherit" /> : <CloudUploadIcon />}
+                  disabled={isUploading}
+                >
+                  {isUploading ? 'Uploading...' : '📁 Upload Image File'}
+                  <input type="file" accept="image/*" hidden onChange={handleFileUpload} />
+                </Button>
+                <Typography variant="caption" color="text.secondary">Or enter image URL below:</Typography>
+              </Stack>
+              <TextField
+                fullWidth
+                size="small"
+                value={form.imageUrl}
+                onChange={(e) => setForm({ ...form, imageUrl: e.target.value })}
+                placeholder="e.g. https://images.unsplash.com/photo-... or /uploads/banners/..."
+              />
+            </Stack>
+
             {form.imageUrl && (
-              <Box sx={{ border: '1px dashed #ccc', borderRadius: 1, p: 1, textAlign: 'center' }}>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>Image Preview</Typography>
+              <Box sx={{ border: '1px dashed #ccc', borderRadius: 1, p: 1.5, textAlign: 'center', backgroundColor: '#f9f9f9' }}>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1, fontWeight: 600 }}>Live Image Preview</Typography>
                 <img
-                  src={form.imageUrl}
+                  src={resolveImageUrl(form.imageUrl)}
                   alt="Preview"
-                  style={{ maxHeight: 120, maxWidth: '100%', objectFit: 'contain' }}
+                  style={{ maxHeight: 150, maxWidth: '100%', objectFit: 'contain', borderRadius: 8 }}
                   onError={(e: any) => {
                     e.target.src = 'https://placehold.co/600x300?text=Invalid+Image+URL';
                   }}
                 />
               </Box>
             )}
+
             <FormControlLabel
               control={<Switch checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} />}
               label="Active (visible on Android app home slider)"
@@ -220,7 +264,7 @@ const BannersPage: React.FC = () => {
           <Button
             variant="contained"
             onClick={handleSubmit}
-            disabled={!form.title.trim() || !form.imageUrl.trim() || createMutation.isPending || updateMutation.isPending}
+            disabled={!form.title.trim() || !form.imageUrl.trim() || createMutation.isPending || updateMutation.isPending || isUploading}
             startIcon={(createMutation.isPending || updateMutation.isPending) ? <CircularProgress size={16} color="inherit" /> : undefined}
           >
             {editBannerData ? 'Save Changes' : 'Create Banner'}

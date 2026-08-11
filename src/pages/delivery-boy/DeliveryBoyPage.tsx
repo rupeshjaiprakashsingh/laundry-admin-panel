@@ -237,6 +237,31 @@ const PickupCard: React.FC<{
               </Box>
             </Box>
 
+            {/* Payment Details */}
+            {pickup.order && (
+              <Box
+                sx={{
+                  display: 'flex', alignItems: 'center', gap: 1, mt: 1, mb: 1,
+                  px: 1.5, py: 0.85,
+                  bgcolor: pickup.order.paymentStatus === 'Paid' ? '#ECFDF5' : '#FFFBEB',
+                  borderRadius: 2,
+                  border: pickup.order.paymentStatus === 'Paid' ? '1px solid #A7F3D0' : '1px solid #FDE68A',
+                }}
+              >
+                <Box
+                  sx={{
+                    width: 8, height: 8, borderRadius: '50%',
+                    bgcolor: pickup.order.paymentStatus === 'Paid' ? '#10B981' : '#F59E0B',
+                  }}
+                />
+                <Typography sx={{ fontSize: 12, fontWeight: 800, color: pickup.order.paymentStatus === 'Paid' ? '#047857' : '#B45309' }}>
+                  {pickup.order.paymentStatus === 'Paid'
+                    ? 'Payment: Paid'
+                    : `Payment: ₹${pickup.order.netAmount ? pickup.order.netAmount.toFixed(0) : '0'}`}
+                </Typography>
+              </Box>
+            )}
+
             {/* Drop Off Laundry Shop Info */}
             {pickup.order?.laundryShop && (
               <Box
@@ -609,18 +634,27 @@ const DeliveryCard: React.FC<{
               </Box>
             )}
 
-            {/* Payment status indicator */}
-            {delivery.order?.paymentStatus && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
+            {/* Payment Details */}
+            {delivery.order && (
+              <Box
+                sx={{
+                  display: 'flex', alignItems: 'center', gap: 1, mt: 1, mb: 1,
+                  px: 1.5, py: 0.85,
+                  bgcolor: delivery.order.paymentStatus === 'Paid' ? '#ECFDF5' : '#FFFBEB',
+                  borderRadius: 2,
+                  border: delivery.order.paymentStatus === 'Paid' ? '1px solid #A7F3D0' : '1px solid #FDE68A',
+                }}
+              >
                 <Box
                   sx={{
                     width: 8, height: 8, borderRadius: '50%',
                     bgcolor: delivery.order.paymentStatus === 'Paid' ? '#10B981' : '#F59E0B',
                   }}
                 />
-                <Typography sx={{ fontSize: 11, color: '#6B7280', fontWeight: 600 }}>
-                  Payment: {delivery.order.paymentStatus}
-                  {delivery.order.netAmount ? ` — ₹${delivery.order.netAmount.toFixed(0)}` : ''}
+                <Typography sx={{ fontSize: 12, fontWeight: 800, color: delivery.order.paymentStatus === 'Paid' ? '#047857' : '#B45309' }}>
+                  {delivery.order.paymentStatus === 'Paid'
+                    ? 'Payment: Paid'
+                    : `Payment: ₹${delivery.order.netAmount ? delivery.order.netAmount.toFixed(0) : '0'}`}
                 </Typography>
               </Box>
             )}
@@ -778,6 +812,36 @@ const DeliveryCard: React.FC<{
 
           {confirmDialog?.status === 'Delivered' && (
             <Box sx={{ mt: 1 }}>
+              {delivery.order?.paymentStatus !== 'Paid' ? (
+                <Box
+                  sx={{
+                    p: 1.5, mb: 2, bgcolor: '#FFFBEB', borderRadius: 2,
+                    border: '1.5px solid #F59E0B',
+                  }}
+                >
+                  <Typography sx={{ fontWeight: 800, fontSize: 13, color: '#B45309', mb: 0.5, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    💵 COD Cash Collection Required
+                  </Typography>
+                  <Typography sx={{ fontSize: 12, color: '#92400E', fontWeight: 600 }}>
+                    Please collect <strong>₹{delivery.order?.netAmount ? delivery.order.netAmount.toFixed(0) : '0'}</strong> from {customer?.firstName} {customer?.lastName} in Cash / UPI before completing delivery.
+                  </Typography>
+                </Box>
+              ) : (
+                <Box
+                  sx={{
+                    p: 1.5, mb: 2, bgcolor: '#ECFDF5', borderRadius: 2,
+                    border: '1.5px solid #10B981',
+                  }}
+                >
+                  <Typography sx={{ fontWeight: 800, fontSize: 13, color: '#047857', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    💳 Payment Received (Paid)
+                  </Typography>
+                  <Typography sx={{ fontSize: 11, color: '#065F46', mt: 0.25 }}>
+                    No cash collection required. Verify OTP to complete delivery.
+                  </Typography>
+                </Box>
+              )}
+
               {!otpSent ? (
                 <Button
                   fullWidth variant="contained"

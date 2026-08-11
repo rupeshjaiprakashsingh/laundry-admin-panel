@@ -59,6 +59,8 @@ export interface PickupAssignment {
   order?: {
     id: number;
     orderNumber: string;
+    netAmount?: number;
+    paymentStatus?: string;
     laundryShop?: LaundryShopInfo;
   } | null;
 }
