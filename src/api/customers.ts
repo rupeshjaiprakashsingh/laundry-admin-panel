@@ -6,3 +6,5 @@ export const getCustomer = (id: number): Promise<Customer> => api.get(`/customer
 export const updateCustomer = (id: number, data: Partial<Customer>) =>
   api.put(`/customers/${id}`, data).then((r) => r.data);
 export const deleteCustomer = (id: number) => api.delete(`/customers/${id}`).then((r) => r.data);
+export const deleteAllCustomers = () => api.delete('/customers/all').then((r) => r.data);
+

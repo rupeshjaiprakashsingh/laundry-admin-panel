@@ -9,10 +9,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import SearchIcon from '@mui/icons-material/Search';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import DeleteIcon from '@mui/icons-material/Delete';
+import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import PageHeader from '../../components/PageHeader';
 import ConfirmDialog from '../../components/ConfirmDialog';
-import { getCustomers, deleteCustomer } from '../../api/customers';
+import { getCustomers, deleteCustomer, deleteAllCustomers } from '../../api/customers';
 import { formatDate, exportToExcel } from '../../utils/export';
 import type { Customer } from '../../types';
 import { usePermission } from '../../hooks/useAuth';
@@ -23,12 +24,18 @@ const CustomersPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [viewCustomer, setViewCustomer] = useState<Customer | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
 
   const { data: customers = [], isLoading, error } = useQuery({ queryKey: ['customers'], queryFn: getCustomers });
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => deleteCustomer(id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['customers'] }); setDeleteId(null); },
+  });
+
+  const deleteAllMutation = useMutation({
+    mutationFn: () => deleteAllCustomers(),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['customers'] }); setConfirmDeleteAll(false); },
   });
 
   const filtered = useMemo(() =>
@@ -53,9 +60,21 @@ const CustomersPage: React.FC = () => {
     { field: 'city', headerName: 'City', width: 120, renderCell: (p) => p.value || '-' },
     { field: 'pincode', headerName: 'Pincode', width: 100, renderCell: (p) => p.value || '-' },
     {
+      field: 'isServiceable', headerName: 'Service Area', width: 170,
+      renderCell: (p) => (
+        <Chip
+          label={p.row.isServiceable === false ? 'Out of Service Area' : 'Serviceable Area'}
+          color={p.row.isServiceable === false ? 'error' : 'success'}
+          size="small"
+          sx={{ fontWeight: 700, fontSize: 11 }}
+        />
+      ),
+    },
+    {
       field: 'isActive', headerName: 'Status', width: 100,
       renderCell: (p) => <Chip label={p.value ? 'Active' : 'Inactive'} color={p.value ? 'success' : 'error'} size="small" sx={{ fontWeight: 700 }} />,
     },
+
     { field: 'createdDate', headerName: 'Joined', width: 120, renderCell: (p) => formatDate(p.value) },
     {
       field: 'actions', headerName: 'Actions', width: 100, sortable: false,
@@ -82,11 +101,25 @@ const CustomersPage: React.FC = () => {
       />
 
       <Card sx={{ mb: 2, p: 2 }}>
-        <TextField
-          size="small" placeholder="Search by name, mobile, email, code..." fullWidth
-          value={search} onChange={(e) => setSearch(e.target.value)}
-          slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> } }}
-        />
+        <Stack direction="row" spacing={2} alignItems="center">
+          <TextField
+            size="small" placeholder="Search by name, mobile, email, code..." fullWidth
+            value={search} onChange={(e) => setSearch(e.target.value)}
+            slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> } }}
+          />
+          {isSuperAdmin && (
+            <Button
+              variant="contained"
+              color="error"
+              startIcon={<DeleteSweepIcon />}
+              onClick={() => setConfirmDeleteAll(true)}
+              sx={{ whiteSpace: 'nowrap', px: 2, py: 0.9 }}
+              disabled={customers.length === 0}
+            >
+              Remove All Users
+            </Button>
+          )}
+        </Stack>
       </Card>
 
       <Card>
@@ -160,8 +193,18 @@ const CustomersPage: React.FC = () => {
         onCancel={() => setDeleteId(null)}
         loading={deleteMutation.isPending}
       />
+
+      <ConfirmDialog
+        open={confirmDeleteAll} title="Remove ALL Users"
+        message="Are you sure you want to remove ALL registered customers and clear their test data for QA testing? This action will permanently remove all app users and cannot be undone."
+        confirmLabel="Remove All Users" severity="error"
+        onConfirm={() => deleteAllMutation.mutate()}
+        onCancel={() => setConfirmDeleteAll(false)}
+        loading={deleteAllMutation.isPending}
+      />
     </Box>
   );
 };
 
 export default CustomersPage;
+
