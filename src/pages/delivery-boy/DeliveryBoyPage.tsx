@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
   Box, Typography, Card, CardContent, Chip, Avatar, IconButton,
   Button, CircularProgress, Snackbar, Alert as MuiAlert,
@@ -930,20 +930,84 @@ const DeliveryBoyPage: React.FC = () => {
   const [toast, setToast] = useState<{ msg: string; severity: 'success' | 'error' } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Queries
+  // ── Auto-Refresh: 30-second polling ──────────────────────────────────────
+  // Queries auto-poll every 30s when tab is visible, immediately on tab focus
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [secondsAgo, setSecondsAgo] = useState(0);
+  const prevPickupCount = useRef<number>(-1);
+  const prevDeliveryCount = useRef<number>(-1);
+
   const { data: laundryShops = [] } = useQuery({ queryKey: ['laundry-shops'], queryFn: getLaundryShops });
 
   const {
     data: pickups = [],
     isLoading: pickupsLoading,
+    isFetching: pickupsFetching,
     refetch: refetchPickups,
-  } = useQuery({ queryKey: ['my-pickups'], queryFn: getMyPickupAssignments });
+  } = useQuery({
+    queryKey: ['my-pickups'],
+    queryFn: getMyPickupAssignments,
+    refetchInterval: 30_000,              // Auto-poll every 30 seconds
+    refetchIntervalInBackground: false,   // Pause polling when tab is hidden (saves mobile data)
+    refetchOnWindowFocus: true,           // Immediately refresh when delivery boy switches back to tab
+    staleTime: 20_000,                    // Consider data fresh for 20s to avoid over-fetching
+  });
 
   const {
     data: rawDeliveries = [],
     isLoading: deliveriesLoading,
+    isFetching: deliveriesFetching,
     refetch: refetchDeliveries,
-  } = useQuery({ queryKey: ['my-deliveries'], queryFn: getMyDeliveries });
+  } = useQuery({
+    queryKey: ['my-deliveries'],
+    queryFn: getMyDeliveries,
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
+    staleTime: 20_000,
+  });
+
+  // Update last-updated timestamp whenever a fetch completes
+  useEffect(() => {
+    if (!pickupsFetching && !deliveriesFetching) {
+      setLastUpdated(new Date());
+      setSecondsAgo(0);
+    }
+  }, [pickupsFetching, deliveriesFetching]);
+
+  // Tick the "last updated X seconds ago" counter every second
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setSecondsAgo(prev => prev + 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Detect new pickup assignments and show toast notification
+  useEffect(() => {
+    if (prevPickupCount.current === -1) {
+      prevPickupCount.current = pickups.length;
+      return;
+    }
+    const newCount = pickups.filter((p: any) => p.status === 'Assigned' || p.status === 'Pending').length;
+    if (newCount > prevPickupCount.current) {
+      setToast({ msg: `🚴 New pickup assigned! You have ${newCount} pickup${newCount > 1 ? 's' : ''} today.`, severity: 'success' });
+    }
+    prevPickupCount.current = newCount;
+  }, [pickups]);
+
+  // Detect new delivery assignments and show toast notification
+  useEffect(() => {
+    if (prevDeliveryCount.current === -1) {
+      prevDeliveryCount.current = rawDeliveries.length;
+      return;
+    }
+    const newCount = (rawDeliveries as any[]).filter(d => d.deliveryStatus === 'Pending').length;
+    if (newCount > prevDeliveryCount.current) {
+      setToast({ msg: `📦 New delivery assigned! Check your deliveries.`, severity: 'success' });
+    }
+    prevDeliveryCount.current = newCount;
+  }, [rawDeliveries]);
 
   const deliveries = useMemo(() => {
     const filtered = (rawDeliveries as any[]).filter(d =>
@@ -1035,6 +1099,7 @@ const DeliveryBoyPage: React.FC = () => {
   const handleRefresh = useCallback(() => {
     refetchPickups();
     refetchDeliveries();
+    setToast({ msg: 'Refreshing...', severity: 'success' });
   }, [refetchPickups, refetchDeliveries]);
 
   const handleLogout = () => {
@@ -1042,7 +1107,9 @@ const DeliveryBoyPage: React.FC = () => {
     window.location.href = '/admin/login';
   };
 
+  // Show spinner on initial load OR during any background fetch
   const isLoading = pickupsLoading || deliveriesLoading;
+  const isFetching = pickupsFetching || deliveriesFetching;
 
   return (
     <Box
@@ -1083,12 +1150,42 @@ const DeliveryBoyPage: React.FC = () => {
             >
               <WaterDropIcon sx={{ color: '#fff', fontSize: 18 }} />
             </Box>
-            <Typography sx={{ color: 'rgba(255,255,255,0.9)', fontSize: 13, fontWeight: 700, letterSpacing: 0.5 }}>
-              Grivana
-            </Typography>
+            <Box>
+              <Typography sx={{ color: 'rgba(255,255,255,0.9)', fontSize: 13, fontWeight: 700, letterSpacing: 0.5 }}>
+                Grivana
+              </Typography>
+              {/* Live indicator: shows last updated time */}
+              <Typography sx={{ color: 'rgba(255,255,255,0.6)', fontSize: 10, lineHeight: 1 }}>
+                {isFetching
+                  ? 'Updating...'
+                  : lastUpdated
+                  ? secondsAgo < 5
+                    ? '✅ Just updated'
+                    : `Updated ${secondsAgo}s ago`
+                  : 'Loading...'}
+              </Typography>
+            </Box>
           </Box>
-          <IconButton onClick={handleRefresh} size="small" sx={{ color: 'rgba(255,255,255,0.8)', '&:hover': { bgcolor: 'rgba(255,255,255,0.15)' } }}>
-            {isLoading ? <CircularProgress size={18} sx={{ color: '#fff' }} /> : <RefreshIcon fontSize="small" />}
+          {/* Refresh button — spins during auto-fetch */}
+          <IconButton
+            onClick={handleRefresh}
+            size="small"
+            title="Refresh now"
+            sx={{
+              color: 'rgba(255,255,255,0.8)',
+              '&:hover': { bgcolor: 'rgba(255,255,255,0.15)' },
+            }}
+          >
+            {(isLoading || isFetching)
+              ? <CircularProgress size={18} sx={{ color: '#fff' }} />
+              : <RefreshIcon
+                  fontSize="small"
+                  sx={{
+                    transition: 'transform 0.3s',
+                    '&:hover': { transform: 'rotate(180deg)' },
+                  }}
+                />
+            }
           </IconButton>
         </Box>
 
