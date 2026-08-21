@@ -49,6 +49,7 @@ const OrdersPage: React.FC = () => {
   const [editOrder, setEditOrder] = useState<Order | null>(null);
   const [newStatus, setNewStatus] = useState('');
   const [newPayment, setNewPayment] = useState('');
+  const [newPaymentMode, setNewPaymentMode] = useState('Cash');
 
   // Multi-select state for bulk assign
   const [selectedRowIds, setSelectedRowIds] = useState<GridRowSelectionModel>({ type: 'include', ids: new Set() });
@@ -68,7 +69,7 @@ const OrdersPage: React.FC = () => {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['orders'] }); setEditOrder(null); },
   });
   const paymentMutation = useMutation({
-    mutationFn: ({ id, status }: { id: number; status: string }) => updatePaymentStatus(id, status),
+    mutationFn: ({ id, status, mode }: { id: number; status: string; mode?: string }) => updatePaymentStatus(id, status, mode),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['orders'] }); setEditOrder(null); },
   });
   const bulkAssignMutation = useMutation({
@@ -161,7 +162,13 @@ const OrdersPage: React.FC = () => {
       renderCell: (p) => (
         <Stack direction="row">
           <Tooltip title="View Details"><IconButton size="small" onClick={() => setSelectedOrder(p.row)}><VisibilityIcon fontSize="small" /></IconButton></Tooltip>
-          <Tooltip title="Update Status"><IconButton size="small" onClick={() => { setEditOrder(p.row); setNewStatus(p.row.orderStatus); setNewPayment(p.row.paymentStatus); }}><EditIcon fontSize="small" /></IconButton></Tooltip>
+          <Tooltip title="Update Status"><IconButton size="small" onClick={() => {
+            setEditOrder(p.row);
+            setNewStatus(p.row.orderStatus);
+            setNewPayment(p.row.paymentStatus);
+            const lastPayment = p.row.payments && p.row.payments.length > 0 ? p.row.payments[p.row.payments.length - 1] : null;
+            setNewPaymentMode(lastPayment?.paymentMode || 'Cash');
+          }}><EditIcon fontSize="small" /></IconButton></Tooltip>
         </Stack>
       ),
     },
@@ -392,35 +399,52 @@ const OrdersPage: React.FC = () => {
 
       {/* ---- Edit Status Dialog ---- */}
       <Dialog open={!!editOrder} onClose={() => setEditOrder(null)} maxWidth="xs" fullWidth>
-        <DialogTitle>Update Order #{editOrder?.orderNumber}</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 800 }}>Update Order #{editOrder?.orderNumber}</DialogTitle>
         <DialogContent>
           <Stack spacing={2.5} sx={{ mt: 1 }}>
-            <FormControl fullWidth>
+            <FormControl fullWidth size="small">
               <InputLabel>Order Status</InputLabel>
               <Select value={newStatus} label="Order Status" onChange={(e) => setNewStatus(e.target.value)}>
                 {ORDER_STATUSES.map((s) => <MenuItem key={s} value={s}>{s}</MenuItem>)}
               </Select>
             </FormControl>
-            <FormControl fullWidth>
+            <FormControl fullWidth size="small">
               <InputLabel>Payment Status</InputLabel>
               <Select value={newPayment} label="Payment Status" onChange={(e) => setNewPayment(e.target.value)}>
                 {PAYMENT_STATUSES.map((s) => <MenuItem key={s} value={s}>{s}</MenuItem>)}
               </Select>
             </FormControl>
+
+            {newPayment === 'Paid' && (
+              <FormControl fullWidth size="small">
+                <InputLabel>Payment Mode</InputLabel>
+                <Select value={newPaymentMode} label="Payment Mode" onChange={(e) => setNewPaymentMode(e.target.value)}>
+                  <MenuItem value="Cash">💵 Cash</MenuItem>
+                  <MenuItem value="UPI">📱 UPI</MenuItem>
+                  <MenuItem value="Online">🌐 Online</MenuItem>
+                  <MenuItem value="Card">💳 Card</MenuItem>
+                </Select>
+              </FormControl>
+            )}
           </Stack>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setEditOrder(null)}>Cancel</Button>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setEditOrder(null)} sx={{ textTransform: 'none' }}>Cancel</Button>
           <Button variant="contained"
             disabled={statusMutation.isPending || paymentMutation.isPending}
             startIcon={(statusMutation.isPending || paymentMutation.isPending) ? <CircularProgress size={16} color="inherit" /> : undefined}
             onClick={() => {
               if (editOrder) {
                 if (newStatus !== editOrder.orderStatus) statusMutation.mutate({ id: editOrder.id, status: newStatus });
-                if (newPayment !== editOrder.paymentStatus) paymentMutation.mutate({ id: editOrder.id, status: newPayment });
-                if (newStatus === editOrder.orderStatus && newPayment === editOrder.paymentStatus) setEditOrder(null);
+                if (newPayment !== editOrder.paymentStatus || newPayment === 'Paid') {
+                  paymentMutation.mutate({ id: editOrder.id, status: newPayment, mode: newPaymentMode });
+                }
+                if (newStatus === editOrder.orderStatus && newPayment === editOrder.paymentStatus && newPayment !== 'Paid') {
+                  setEditOrder(null);
+                }
               }
             }}
+            sx={{ textTransform: 'none', fontWeight: 700 }}
           >
             Save Changes
           </Button>

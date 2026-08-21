@@ -3,6 +3,7 @@ import {
   Box, Card, Tab, Tabs, Typography, IconButton, Tooltip, Chip, Button, Grid,
   Dialog, DialogTitle, DialogContent, DialogActions, TextField,
   Alert, Stack, Select, MenuItem, FormControl, InputLabel, CircularProgress,
+  Snackbar,
 } from '@mui/material';
 import { DataGrid, type GridColDef } from '@mui/x-data-grid';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -34,17 +35,89 @@ const PricingPage: React.FC = () => {
   const [deletePriceId, setDeletePriceId] = useState<number | null>(null);
   const [newPrice, setNewPrice] = useState<Partial<ServicePrice>>({});
 
+  const [snack, setSnack] = useState<{ msg: string; severity: 'success' | 'error' } | null>(null);
+
   const { data: products = [], isLoading: pLoading } = useQuery<Product[]>({ queryKey: ['products'], queryFn: getProducts });
   const { data: prices = [], isLoading: prLoading } = useQuery<ServicePrice[]>({ queryKey: ['service-prices'], queryFn: getServicePrices });
   const { data: services = [] } = useQuery<Service[]>({ queryKey: ['services'], queryFn: getServices });
 
-  const createProductMutation = useMutation({ mutationFn: createProduct, onSuccess: () => { qc.invalidateQueries({ queryKey: ['products'] }); setProductFormOpen(false); } });
-  const updateProductMutation = useMutation({ mutationFn: ({ id, data }: { id: number; data: Partial<Product> }) => updateProduct(id, data), onSuccess: () => { qc.invalidateQueries({ queryKey: ['products'] }); setEditProduct(null); setProductFormOpen(false); } });
-  const deleteProductMutation = useMutation({ mutationFn: deleteProduct, onSuccess: () => { qc.invalidateQueries({ queryKey: ['products'] }); setDeleteProductId(null); } });
+  const createProductMutation = useMutation({
+    mutationFn: createProduct,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['products'] });
+      setProductFormOpen(false);
+      setSnack({ msg: 'Product created!', severity: 'success' });
+    },
+    onError: (err: any) => setSnack({ msg: err.response?.data?.message || 'Failed to create product', severity: 'error' }),
+  });
 
-  const createPriceMutation = useMutation({ mutationFn: createServicePrice, onSuccess: () => { qc.invalidateQueries({ queryKey: ['service-prices'] }); setPriceFormOpen(false); } });
-  const updatePriceMutation = useMutation({ mutationFn: ({ id, data }: { id: number; data: Partial<ServicePrice> }) => updateServicePrice(id, data), onSuccess: () => { qc.invalidateQueries({ queryKey: ['service-prices'] }); setEditPrice(null); setPriceFormOpen(false); } });
-  const deletePriceMutation = useMutation({ mutationFn: deleteServicePrice, onSuccess: () => { qc.invalidateQueries({ queryKey: ['service-prices'] }); setDeletePriceId(null); } });
+  const updateProductMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: Partial<Product> }) => updateProduct(id, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['products'] });
+      setEditProduct(null);
+      setProductFormOpen(false);
+      setSnack({ msg: 'Product updated!', severity: 'success' });
+    },
+    onError: (err: any) => setSnack({ msg: err.response?.data?.message || 'Failed to update product', severity: 'error' }),
+  });
+
+  const deleteProductMutation = useMutation({
+    mutationFn: deleteProduct,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['products'] });
+      setDeleteProductId(null);
+      setSnack({ msg: 'Product deleted!', severity: 'success' });
+    },
+  });
+
+  const createPriceMutation = useMutation({
+    mutationFn: (data: Partial<ServicePrice>) => {
+      const payload: any = {
+        serviceId: Number(data.serviceId),
+        productId: Number(data.productId),
+        pincode: String(data.pincode || 'DEFAULT').trim(),
+        price: Number(data.price),
+        isActive: data.isActive !== undefined ? data.isActive : true,
+      };
+      return createServicePrice(payload);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['service-prices'] });
+      setPriceFormOpen(false);
+      setSnack({ msg: 'Price rule created successfully!', severity: 'success' });
+    },
+    onError: (err: any) => setSnack({ msg: err.response?.data?.message || 'Failed to create price rule', severity: 'error' }),
+  });
+
+  const updatePriceMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: Partial<ServicePrice> }) => {
+      const payload: any = {
+        serviceId: data.serviceId ? Number(data.serviceId) : undefined,
+        productId: data.productId ? Number(data.productId) : undefined,
+        pincode: data.pincode ? String(data.pincode).trim() : undefined,
+        price: data.price !== undefined ? Number(data.price) : undefined,
+        isActive: data.isActive !== undefined ? data.isActive : true,
+      };
+      return updateServicePrice(id, payload);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['service-prices'] });
+      setEditPrice(null);
+      setPriceFormOpen(false);
+      setSnack({ msg: 'Price rule updated successfully!', severity: 'success' });
+    },
+    onError: (err: any) => setSnack({ msg: err.response?.data?.message || 'Failed to update price rule', severity: 'error' }),
+  });
+
+  const deletePriceMutation = useMutation({
+    mutationFn: deleteServicePrice,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['service-prices'] });
+      setDeletePriceId(null);
+      setSnack({ msg: 'Price rule deleted!', severity: 'success' });
+    },
+  });
 
   const productColumns: GridColDef[] = [
     { field: 'emoji', headerName: '', width: 60, renderCell: (p) => <Typography sx={{ fontSize: 24 }}>{p.value}</Typography> },
@@ -190,6 +263,17 @@ const PricingPage: React.FC = () => {
         onConfirm={() => deletePriceId !== null && deletePriceMutation.mutate(deletePriceId)}
         onCancel={() => setDeletePriceId(null)} loading={deletePriceMutation.isPending}
       />
+
+      <Snackbar
+        open={!!snack}
+        autoHideDuration={3500}
+        onClose={() => setSnack(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert severity={snack?.severity || 'info'} onClose={() => setSnack(null)} sx={{ width: '100%' }}>
+          {snack?.msg}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

@@ -67,16 +67,48 @@ const SettingsPage: React.FC = () => {
 
   // Time Slot mutations
   const createSlotMutation = useMutation({
-    mutationFn: createTimeSlot,
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['timeSlots'] }); setSlotFormOpen(false); setSnack('Time slot created!'); },
+    mutationFn: (data: any) => createTimeSlot({
+      slotName: String(data.slotName).trim(),
+      maxCapacity: Number(data.maxCapacity) || 20,
+      isActive: data.isActive !== undefined ? Boolean(data.isActive) : true,
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['timeSlots'] });
+      setSlotFormOpen(false);
+      setSnack('Time slot created successfully!');
+    },
+    onError: (err: any) => {
+      setSnack(err.response?.data?.message || 'Failed to create time slot');
+    },
   });
+
   const updateSlotMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: any }) => updateTimeSlot(id, data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['timeSlots'] }); setEditSlot(null); setSlotFormOpen(false); setSnack('Time slot updated!'); },
+    mutationFn: ({ id, data }: { id: number; data: any }) => updateTimeSlot(id, {
+      slotName: data.slotName ? String(data.slotName).trim() : undefined,
+      maxCapacity: data.maxCapacity !== undefined ? Number(data.maxCapacity) : undefined,
+      isActive: data.isActive !== undefined ? Boolean(data.isActive) : undefined,
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['timeSlots'] });
+      setEditSlot(null);
+      setSlotFormOpen(false);
+      setSnack('Time slot updated successfully!');
+    },
+    onError: (err: any) => {
+      setSnack(err.response?.data?.message || 'Failed to update time slot');
+    },
   });
+
   const deleteSlotMutation = useMutation({
     mutationFn: deleteTimeSlot,
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['timeSlots'] }); setDeleteSlotId(null); setSnack('Time slot deleted!'); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['timeSlots'] });
+      setDeleteSlotId(null);
+      setSnack('Time slot deleted!');
+    },
+    onError: (err: any) => {
+      setSnack(err.response?.data?.message || 'Failed to delete time slot');
+    },
   });
 
   const { register, handleSubmit, formState: { errors } } = useForm<ProfileForm>({

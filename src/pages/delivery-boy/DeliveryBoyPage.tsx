@@ -82,17 +82,23 @@ function buildAddress(customer: {
   state?: string;
   pincode?: string;
 }): string {
-  return [customer.houseDetails, customer.landmark, customer.address, customer.city, customer.state]
+  return [customer.houseDetails, customer.landmark, customer.address, customer.city, customer.state, customer.pincode]
     .filter(Boolean)
     .join(', ');
 }
 
 function openMaps(address: string) {
-  const encoded = encodeURIComponent(address);
+  if (!address || !address.trim()) {
+    alert('Address not available for navigation.');
+    return;
+  }
+  const encoded = encodeURIComponent(address.trim());
+  // Use Google Maps directions URL — works on Android (opens app), desktop (opens web)
+  // The 'daddr' param is the destination address for navigation
   window.open(
-    `https://www.google.com/maps/dir/?api=1&destination=${encoded}`,
+    `https://www.google.com/maps/dir/?api=1&destination=${encoded}&travelmode=driving`,
     '_blank',
-    'noopener',
+    'noopener,noreferrer',
   );
 }
 
@@ -462,19 +468,27 @@ const PickupCard: React.FC<{
               </Box>
 
               {showAddShop && (
-                <Card variant="outlined" sx={{ p: 1.5, mt: 1, bgcolor: '#F9FAFB', borderRadius: 2 }}>
+                <Card variant="outlined" sx={{ p: 1.5, mt: 1, bgcolor: '#fff', borderRadius: 2, border: '1.5px solid #E0E7FF' }}>
                   <Typography variant="caption" sx={{ fontWeight: 700, display: 'block', mb: 1, color: '#4B5563' }}>
                     NEW LAUNDRY SHOP DETAILS:
                   </Typography>
                   <TextField
                     fullWidth size="small" label="Shop Name"
                     value={newShopName} onChange={(e) => setNewShopName(e.target.value)}
-                    sx={{ mb: 1 }}
+                    sx={{
+                      mb: 1,
+                      '& .MuiInputBase-input': { color: '#111827' },
+                      '& .MuiInputLabel-root': { color: '#6B7280' },
+                    }}
                   />
                   <TextField
                     fullWidth size="small" label="Pincode"
                     value={newShopPincode} onChange={(e) => setNewShopPincode(e.target.value)}
-                    sx={{ mb: 1.5 }}
+                    sx={{
+                      mb: 1.5,
+                      '& .MuiInputBase-input': { color: '#111827' },
+                      '& .MuiInputLabel-root': { color: '#6B7280' },
+                    }}
                   />
                   <Button
                     fullWidth size="small" variant="contained"
