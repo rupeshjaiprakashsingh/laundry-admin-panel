@@ -451,7 +451,42 @@ const PickupCard: React.FC<{
                   setSelectedShopId(newValue ? newValue.id : '');
                 }}
                 renderInput={(params) => (
-                  <TextField {...params} label="Search & Select Laundry Shop" />
+                  <TextField
+                    {...params}
+                    label="Search & Select Laundry Shop"
+                    slotProps={{
+                      input: {
+                        ...params.InputProps,
+                        sx: {
+                          color: '#0F172A !important',
+                          bgcolor: '#FFFFFF !important',
+                          fontWeight: 600,
+                          fontSize: 14,
+                          '& input': {
+                            color: '#0F172A !important',
+                            WebkitTextFillColor: '#0F172A !important',
+                          },
+                        },
+                      },
+                      inputLabel: {
+                        sx: {
+                          color: '#475569 !important',
+                          fontWeight: 700,
+                          '&.Mui-focused': { color: '#4F46E5 !important' },
+                        },
+                      },
+                    }}
+                    sx={{
+                      bgcolor: '#FFFFFF',
+                      borderRadius: 1,
+                      '& .MuiOutlinedInput-root': {
+                        bgcolor: '#FFFFFF !important',
+                        '& fieldset': { borderColor: '#CBD5E1', borderWidth: 1.5 },
+                        '&:hover fieldset': { borderColor: '#4F46E5' },
+                        '&.Mui-focused fieldset': { borderColor: '#4F46E5' },
+                      },
+                    }}
+                  />
                 )}
                 sx={{ mb: 1.5 }}
               />
@@ -461,42 +496,144 @@ const PickupCard: React.FC<{
                   size="small"
                   variant="text"
                   onClick={() => setShowAddShop(!showAddShop)}
-                  sx={{ textTransform: 'none', fontWeight: 700, fontSize: 12 }}
+                  sx={{ textTransform: 'none', fontWeight: 700, fontSize: 12, color: '#4F46E5' }}
                 >
                   {showAddShop ? 'Cancel Add New Shop' : '+ Add New Laundry Shop'}
                 </Button>
               </Box>
 
               {showAddShop && (
-                <Card variant="outlined" sx={{ p: 1.5, mt: 1, bgcolor: '#fff', borderRadius: 2, border: '1.5px solid #E0E7FF' }}>
-                  <Typography variant="caption" sx={{ fontWeight: 700, display: 'block', mb: 1, color: '#4B5563' }}>
-                    NEW LAUNDRY SHOP DETAILS:
+                <Card
+                  variant="outlined"
+                  sx={{
+                    p: 2,
+                    mt: 1.5,
+                    bgcolor: '#FFFFFF !important',
+                    borderRadius: 2,
+                    border: '2px solid #6366F1',
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.08)',
+                  }}
+                >
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontWeight: 800,
+                      display: 'block',
+                      mb: 1.5,
+                      color: '#1E293B !important',
+                      fontSize: 12,
+                      letterSpacing: 0.5,
+                    }}
+                  >
+                    ✨ NEW LAUNDRY SHOP DETAILS:
                   </Typography>
                   <TextField
-                    fullWidth size="small" label="Shop Name"
-                    value={newShopName} onChange={(e) => setNewShopName(e.target.value)}
+                    fullWidth
+                    size="small"
+                    label="Shop Name"
+                    placeholder="e.g. Ashok Laundry"
+                    value={newShopName}
+                    onChange={(e) => setNewShopName(e.target.value)}
+                    slotProps={{
+                      input: {
+                        sx: {
+                          color: '#0F172A !important',
+                          bgcolor: '#F8FAFC !important',
+                          fontWeight: 600,
+                          fontSize: 14,
+                          '& input': {
+                            color: '#0F172A !important',
+                            WebkitTextFillColor: '#0F172A !important',
+                          },
+                        },
+                      },
+                      inputLabel: {
+                        sx: {
+                          color: '#475569 !important',
+                          fontWeight: 700,
+                          '&.Mui-focused': { color: '#4F46E5 !important' },
+                        },
+                      },
+                    }}
                     sx={{
-                      mb: 1,
-                      '& .MuiInputBase-input': { color: '#111827' },
-                      '& .MuiInputLabel-root': { color: '#6B7280' },
+                      mb: 1.5,
+                      '& .MuiOutlinedInput-root': {
+                        bgcolor: '#F8FAFC !important',
+                        '& fieldset': { borderColor: '#CBD5E1', borderWidth: 1.5 },
+                        '&:hover fieldset': { borderColor: '#4F46E5' },
+                        '&.Mui-focused fieldset': { borderColor: '#4F46E5', borderWidth: 2 },
+                      },
+                      '& .MuiInputBase-input': {
+                        color: '#0F172A !important',
+                        WebkitTextFillColor: '#0F172A !important',
+                      },
                     }}
                   />
                   <TextField
-                    fullWidth size="small" label="Pincode"
-                    value={newShopPincode} onChange={(e) => setNewShopPincode(e.target.value)}
+                    fullWidth
+                    size="small"
+                    label="Pincode"
+                    placeholder="e.g. 400078"
+                    value={newShopPincode}
+                    onChange={(e) => setNewShopPincode(e.target.value)}
+                    slotProps={{
+                      input: {
+                        sx: {
+                          color: '#0F172A !important',
+                          bgcolor: '#F8FAFC !important',
+                          fontWeight: 600,
+                          fontSize: 14,
+                          '& input': {
+                            color: '#0F172A !important',
+                            WebkitTextFillColor: '#0F172A !important',
+                          },
+                        },
+                      },
+                      inputLabel: {
+                        sx: {
+                          color: '#475569 !important',
+                          fontWeight: 700,
+                          '&.Mui-focused': { color: '#4F46E5 !important' },
+                        },
+                      },
+                    }}
                     sx={{
-                      mb: 1.5,
-                      '& .MuiInputBase-input': { color: '#111827' },
-                      '& .MuiInputLabel-root': { color: '#6B7280' },
+                      mb: 2,
+                      '& .MuiOutlinedInput-root': {
+                        bgcolor: '#F8FAFC !important',
+                        '& fieldset': { borderColor: '#CBD5E1', borderWidth: 1.5 },
+                        '&:hover fieldset': { borderColor: '#4F46E5' },
+                        '&.Mui-focused fieldset': { borderColor: '#4F46E5', borderWidth: 2 },
+                      },
+                      '& .MuiInputBase-input': {
+                        color: '#0F172A !important',
+                        WebkitTextFillColor: '#0F172A !important',
+                      },
                     }}
                   />
                   <Button
-                    fullWidth size="small" variant="contained"
+                    fullWidth
+                    size="medium"
+                    variant="contained"
                     disabled={creatingShop || !newShopName.trim() || !newShopPincode.trim()}
                     onClick={handleCreateShop}
-                    sx={{ textTransform: 'none', fontWeight: 700 }}
+                    sx={{
+                      textTransform: 'none',
+                      fontWeight: 800,
+                      py: 1,
+                      fontSize: 13,
+                      bgcolor: '#4F46E5 !important',
+                      color: '#FFFFFF !important',
+                      borderRadius: 1.5,
+                      boxShadow: '0 2px 4px rgba(79, 70, 229, 0.3)',
+                      '&:hover': { bgcolor: '#4338CA !important' },
+                      '&.Mui-disabled': {
+                        bgcolor: '#E2E8F0 !important',
+                        color: '#94A3B8 !important',
+                      },
+                    }}
                   >
-                    {creatingShop ? 'Creating...' : 'Create & Select Shop'}
+                    {creatingShop ? 'Creating Shop...' : '+ Create & Select Shop'}
                   </Button>
                 </Card>
               )}
@@ -871,10 +1008,36 @@ const DeliveryCard: React.FC<{
                     Enter 6-digit Delivery OTP:
                   </Typography>
                   <TextField
-                    fullWidth size="small" placeholder="Enter OTP"
-                    value={enteredOtp} onChange={(e) => setEnteredOtp(e.target.value.replace(/\D/g, '').substring(0, 6))}
-                    slotProps={{ htmlInput: { maxLength: 6, style: { textAlign: 'center', letterSpacing: '4px', fontWeight: 'bold' } } }}
-                    sx={{ mb: 1.5 }}
+                    fullWidth
+                    size="small"
+                    placeholder="Enter 6-digit OTP"
+                    value={enteredOtp}
+                    onChange={(e) => setEnteredOtp(e.target.value.replace(/\D/g, '').substring(0, 6))}
+                    slotProps={{
+                      input: {
+                        sx: {
+                          color: '#0F172A !important',
+                          bgcolor: '#F8FAFC !important',
+                          fontWeight: 800,
+                          fontSize: 18,
+                          '& input': {
+                            color: '#0F172A !important',
+                            WebkitTextFillColor: '#0F172A !important',
+                            textAlign: 'center',
+                            letterSpacing: '6px',
+                          },
+                        },
+                      },
+                    }}
+                    sx={{
+                      mb: 1.5,
+                      '& .MuiOutlinedInput-root': {
+                        bgcolor: '#F8FAFC !important',
+                        '& fieldset': { borderColor: '#CBD5E1', borderWidth: 1.5 },
+                        '&:hover fieldset': { borderColor: '#4F46E5' },
+                        '&.Mui-focused fieldset': { borderColor: '#4F46E5' },
+                      },
+                    }}
                   />
                   <Box sx={{ textAlign: 'right' }}>
                     <Button
@@ -1299,7 +1462,16 @@ const DeliveryBoyPage: React.FC = () => {
                       <ClearIcon sx={{ fontSize: 14 }} />
                     </IconButton>
                   </InputAdornment>
-                ) : null
+                ) : null,
+                sx: {
+                  color: '#0F172A !important',
+                  fontWeight: 600,
+                  fontSize: 14,
+                  '& input': {
+                    color: '#0F172A !important',
+                    WebkitTextFillColor: '#0F172A !important',
+                  },
+                },
               }
             }}
           />
