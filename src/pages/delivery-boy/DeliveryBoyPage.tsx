@@ -961,10 +961,10 @@ const DeliveryBoyPage: React.FC = () => {
   } = useQuery({
     queryKey: ['my-pickups'],
     queryFn: getMyPickupAssignments,
-    refetchInterval: 30_000,              // Auto-poll every 30 seconds
-    refetchIntervalInBackground: false,   // Pause polling when tab is hidden (saves mobile data)
-    refetchOnWindowFocus: true,           // Immediately refresh when delivery boy switches back to tab
-    staleTime: 20_000,                    // Consider data fresh for 20s to avoid over-fetching
+    refetchInterval: 5_000,               // Auto-poll every 5 seconds for instant real-time live sync
+    refetchIntervalInBackground: true,    // Keep polling in background so updates arrive immediately
+    refetchOnWindowFocus: 'always',       // Immediately refresh when switching back to tab
+    staleTime: 0,                         // Always consider stale so refetch triggers immediate API call
   });
 
   const {
@@ -975,11 +975,20 @@ const DeliveryBoyPage: React.FC = () => {
   } = useQuery({
     queryKey: ['my-deliveries'],
     queryFn: getMyDeliveries,
-    refetchInterval: 30_000,
-    refetchIntervalInBackground: false,
-    refetchOnWindowFocus: true,
-    staleTime: 20_000,
+    refetchInterval: 5_000,
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: 'always',
+    staleTime: 0,
   });
+
+  // Active heartbeat timer every 5 seconds to ensure polling never sleeps
+  useEffect(() => {
+    const liveTimer = setInterval(() => {
+      refetchPickups();
+      refetchDeliveries();
+    }, 5_000);
+    return () => clearInterval(liveTimer);
+  }, [refetchPickups, refetchDeliveries]);
 
   // Update last-updated timestamp whenever a fetch completes
   useEffect(() => {
