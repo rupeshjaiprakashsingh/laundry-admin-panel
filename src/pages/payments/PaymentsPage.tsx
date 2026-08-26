@@ -18,12 +18,13 @@ import { getOrders, updatePaymentStatus } from '../../api/orders';
 import { formatCurrency, formatDateTime } from '../../utils/export';
 import type { Order } from '../../types';
 
-const modeColors: Record<string, { label: string; color: 'success' | 'secondary' | 'primary' | 'warning' | 'default' }> = {
-  Cash:    { label: '💵 Cash', color: 'success' },
-  UPI:     { label: '📱 UPI', color: 'secondary' },
-  Online:  { label: '🌐 Online', color: 'primary' },
-  Card:    { label: '💳 Card', color: 'primary' },
-  Pending: { label: '⏳ Pending', color: 'warning' },
+const modeColors: Record<string, { label: string; color: 'success' | 'secondary' | 'primary' | 'warning' | 'default'; bg?: string; text?: string; border?: string }> = {
+  Cash:    { label: '💵 Paid in Cash', color: 'success', bg: '#ECFDF5', text: '#047857', border: '#A7F3D0' },
+  GPay:    { label: '📱 Paid in GPay', color: 'secondary', bg: '#EEF2FF', text: '#4338CA', border: '#C7D2FE' },
+  UPI:     { label: '📱 Paid in UPI', color: 'secondary', bg: '#F3E8FF', text: '#7E22CE', border: '#E9D5FF' },
+  Online:  { label: '🌐 Paid Online', color: 'primary', bg: '#EFF6FF', text: '#1D4ED8', border: '#BFDBFE' },
+  Card:    { label: '💳 Paid by Card', color: 'primary', bg: '#ECFEFF', text: '#0E7490', border: '#A5F3FC' },
+  Pending: { label: '⏳ Pending', color: 'warning', bg: '#FFFBEB', text: '#B45309', border: '#FDE68A' },
 };
 
 const PaymentsPage: React.FC = () => {
@@ -59,7 +60,15 @@ const PaymentsPage: React.FC = () => {
         ? o.payments[o.payments.length - 1]
         : null;
 
-      const rawMode = latestPayment?.paymentMode || (o.paymentStatus === 'Paid' ? 'Cash' : 'Pending');
+      let rawMode = latestPayment?.paymentMode;
+      if (!rawMode && o.notes) {
+        const lower = o.notes.toLowerCase();
+        if (lower.includes('gpay') || lower.includes('google pay')) rawMode = 'GPay';
+        else if (lower.includes('upi') || lower.includes('qr')) rawMode = 'UPI';
+        else if (lower.includes('cash') || lower.includes('cod')) rawMode = 'Cash';
+        else if (lower.includes('online')) rawMode = 'Online';
+        else if (lower.includes('card')) rawMode = 'Card';
+      }
       const isPaid = o.paymentStatus === 'Paid';
 
       return {
@@ -69,7 +78,7 @@ const PaymentsPage: React.FC = () => {
         customerName: `${o.customer?.firstName ?? ''} ${o.customer?.lastName ?? ''}`.trim() || 'Customer',
         customerPhone: o.customer?.mobileNumber || '',
         paymentStatus: o.paymentStatus || 'Pending',
-        paymentMode: isPaid ? (rawMode === 'Pending' ? 'Cash' : rawMode) : 'Pending',
+        paymentMode: isPaid ? (rawMode || 'Cash') : 'Pending',
         amount: o.netAmount,
         transactionReference: latestPayment?.transactionReference || '-',
         paidDate: latestPayment?.paidDate || o.createdDate,
@@ -88,7 +97,7 @@ const PaymentsPage: React.FC = () => {
 
   const upiPaid = useMemo(() =>
     allRows
-      .filter((r) => r.paymentStatus === 'Paid' && (r.paymentMode === 'UPI' || r.paymentMode === 'Online' || r.paymentMode === 'Card'))
+      .filter((r) => r.paymentStatus === 'Paid' && (r.paymentMode === 'GPay' || r.paymentMode === 'UPI' || r.paymentMode === 'Online' || r.paymentMode === 'Card'))
       .reduce((sum, r) => sum + (r.amount || 0), 0), [allRows]);
 
   const pendingCollection = useMemo(() =>
@@ -99,7 +108,7 @@ const PaymentsPage: React.FC = () => {
   // Filtered rows by tab
   const filteredRows = useMemo(() => {
     if (tab === 1) return allRows.filter((r) => r.paymentStatus === 'Paid' && r.paymentMode === 'Cash');
-    if (tab === 2) return allRows.filter((r) => r.paymentStatus === 'Paid' && (r.paymentMode === 'UPI' || r.paymentMode === 'Online' || r.paymentMode === 'Card'));
+    if (tab === 2) return allRows.filter((r) => r.paymentStatus === 'Paid' && (r.paymentMode === 'GPay' || r.paymentMode === 'UPI' || r.paymentMode === 'Online' || r.paymentMode === 'Card'));
     if (tab === 3) return allRows.filter((r) => r.paymentStatus === 'Pending');
     return allRows;
   }, [allRows, tab]);
@@ -119,16 +128,20 @@ const PaymentsPage: React.FC = () => {
       ),
     },
     {
-      field: 'paymentMode', headerName: 'Payment Mode', width: 140,
+      field: 'paymentMode', headerName: 'Payment Mode', width: 170,
       renderCell: (p) => {
         const mode = modeColors[p.value] || modeColors.Pending;
         return (
           <Chip
             label={mode.label}
-            color={mode.color}
             size="small"
-            variant={p.value === 'Pending' ? 'outlined' : 'filled'}
-            sx={{ fontWeight: 700, fontSize: 11 }}
+            sx={{
+              fontWeight: 800,
+              fontSize: 11,
+              bgcolor: mode.bg || '#F3F4F6',
+              color: mode.text || '#374151',
+              border: `1px solid ${mode.border || '#E5E7EB'}`,
+            }}
           />
         );
       },
@@ -161,12 +174,11 @@ const PaymentsPage: React.FC = () => {
       ),
     },
     {
-      field: 'actions', headerName: 'Action', width: 90, sortable: false,
+      field: 'actions', headerName: 'Actions', width: 90, sortable: false,
       renderCell: (p) => (
         <Tooltip title="Update Payment">
           <IconButton
             size="small"
-            color="primary"
             onClick={() => {
               setEditOrder(p.row);
               setSelectedStatus(p.row.paymentStatus);
@@ -185,21 +197,21 @@ const PaymentsPage: React.FC = () => {
   return (
     <Box>
       <PageHeader
-        title="Payment Management"
-        subtitle="Track cash collections, UPI payments, and pending dues"
+        title="Payments & Collections"
+        subtitle="Track cash collections, GPay/UPI transfers, and pending order payments in real-time"
         breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Payments' }]}
       />
 
       {/* 4 Stat Cards: Total, Cash, UPI, Pending */}
       <Grid container spacing={2.5} sx={{ mb: 3 }}>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard title="Total Revenue" value={formatCurrency(totalRevenue)} Icon={CurrencyRupeeIcon} color="#3B82F6" />
+          <StatCard title="Total Orders" value={formatCurrency(totalRevenue)} Icon={CurrencyRupeeIcon} color="#3B82F6" />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard title="Cash Paid" value={formatCurrency(cashPaid)} Icon={PaymentsIcon} color="#10B981" />
+          <StatCard title="Paid in Cash" value={formatCurrency(cashPaid)} Icon={PaymentsIcon} color="#10B981" />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard title="UPI / Online Paid" value={formatCurrency(upiPaid)} Icon={QrCodeIcon} color="#8B5CF6" />
+          <StatCard title="Paid in GPay / UPI" value={formatCurrency(upiPaid)} Icon={QrCodeIcon} color="#8B5CF6" />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <StatCard title="Pending Collection" value={formatCurrency(pendingCollection)} Icon={PendingActionsIcon} color="#EF4444" />
@@ -209,8 +221,8 @@ const PaymentsPage: React.FC = () => {
       {/* Filter Tabs */}
       <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }}>
         <Tab label={`All Transactions (${allRows.length})`} />
-        <Tab label={`💵 Cash (${allRows.filter((r) => r.paymentStatus === 'Paid' && r.paymentMode === 'Cash').length})`} />
-        <Tab label={`📱 UPI / Online (${allRows.filter((r) => r.paymentStatus === 'Paid' && (r.paymentMode === 'UPI' || r.paymentMode === 'Online' || r.paymentMode === 'Card')).length})`} />
+        <Tab label={`💵 Paid in Cash (${allRows.filter((r) => r.paymentStatus === 'Paid' && r.paymentMode === 'Cash').length})`} />
+        <Tab label={`📱 Paid in GPay / UPI (${allRows.filter((r) => r.paymentStatus === 'Paid' && (r.paymentMode === 'GPay' || r.paymentMode === 'UPI' || r.paymentMode === 'Online' || r.paymentMode === 'Card')).length})`} />
         <Tab label={`⏳ Pending (${allRows.filter((r) => r.paymentStatus === 'Pending').length})`} />
       </Tabs>
 
@@ -259,10 +271,11 @@ const PaymentsPage: React.FC = () => {
                   label="Payment Mode"
                   onChange={(e) => setSelectedMode(e.target.value)}
                 >
-                  <MenuItem value="Cash">💵 Cash</MenuItem>
-                  <MenuItem value="UPI">📱 UPI / QR Code</MenuItem>
-                  <MenuItem value="Online">🌐 Online / NetBanking</MenuItem>
-                  <MenuItem value="Card">💳 Card</MenuItem>
+                  <MenuItem value="Cash">💵 Paid in Cash</MenuItem>
+                  <MenuItem value="GPay">📱 Paid in GPay (Google Pay)</MenuItem>
+                  <MenuItem value="UPI">📱 Paid in UPI / QR Code</MenuItem>
+                  <MenuItem value="Online">🌐 Paid Online / NetBanking</MenuItem>
+                  <MenuItem value="Card">💳 Paid by Card</MenuItem>
                 </Select>
               </FormControl>
             )}

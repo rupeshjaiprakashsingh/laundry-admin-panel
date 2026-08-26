@@ -46,14 +46,26 @@ const PickupsPage: React.FC = () => {
   });
 
   const filtered = useMemo(() =>
-    pickups.filter((p) => {
+    pickups.filter((p: any) => {
       const matchStatus = statusFilter === 'All' || p.status === statusFilter;
-      const matchSearch = `${p.customer?.firstName ?? ''} ${p.customer?.lastName ?? ''} ${p.pickupAddress}`.toLowerCase().includes(search.toLowerCase());
+      const matchSearch = `${p.customer?.firstName ?? ''} ${p.customer?.lastName ?? ''} ${p.pickupAddress} ${p.order?.orderNumber ?? ''}`.toLowerCase().includes(search.toLowerCase());
       return matchStatus && matchSearch;
     }), [pickups, search, statusFilter]);
 
   const columns: GridColDef[] = [
-    { field: 'id', headerName: 'ID', width: 70 },
+    { field: 'id', headerName: 'Pickup #', width: 90 },
+    {
+      field: 'order', headerName: 'Order #', width: 130,
+      renderCell: (p) => p.row.order?.orderNumber ? (
+        <Chip
+          label={p.row.order.orderNumber}
+          size="small"
+          sx={{ fontWeight: 800, bgcolor: '#EEF2FF', color: '#4338CA', border: '1px solid #C7D2FE', fontSize: 11 }}
+        />
+      ) : (
+        <Typography sx={{ fontSize: 11, color: 'text.disabled', fontStyle: 'italic' }}>Pending</Typography>
+      ),
+    },
     {
       field: 'customer', headerName: 'Customer', flex: 1, minWidth: 160,
       renderCell: (p) => (

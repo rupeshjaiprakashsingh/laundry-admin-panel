@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Box, Drawer, AppBar, Toolbar, Typography, IconButton,
   List, ListItemButton, ListItemIcon, ListItemText, Avatar,
-  Tooltip, useTheme, alpha, Divider, Chip, Badge,
+  Tooltip, useTheme, alpha, Divider, Chip, Badge, CircularProgress,
 } from '@mui/material';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
+import { useIsFetching, useQueryClient } from '@tanstack/react-query';
+import RefreshIcon from '@mui/icons-material/Refresh';
 
 // Icons
 import DashboardIcon from '@mui/icons-material/Dashboard';
@@ -79,8 +81,32 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ onToggleTheme, isDark }) => {
   const location = useLocation();
   const dispatch = useDispatch();
   const { user } = useAuth();
+  const qc = useQueryClient();
+  const isFetchingCount = useIsFetching();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date>(() => new Date());
+  const [secondsAgo, setSecondsAgo] = useState(0);
+
+  useEffect(() => {
+    if (isFetchingCount === 0) {
+      setLastUpdated(new Date());
+      setSecondsAgo(0);
+    }
+  }, [isFetchingCount]);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setSecondsAgo((prev) => prev + 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const handleRefreshAll = useCallback(() => {
+    qc.invalidateQueries();
+    setLastUpdated(new Date());
+    setSecondsAgo(0);
+  }, [qc]);
 
   const drawerWidth = collapsed ? DRAWER_COLLAPSED : DRAWER_WIDTH;
 
@@ -254,6 +280,72 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ onToggleTheme, isDark }) => {
             </IconButton>
 
             <Box sx={{ flex: 1 }} />
+
+            {/* Live Auto-Refresh Status Pill */}
+            <Tooltip title={`Auto-syncing every 5s. ${secondsAgo < 5 ? 'Just updated' : `Last updated ${secondsAgo}s ago`}`}>
+              <Chip
+                size="small"
+                icon={
+                  <Box
+                    sx={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: '50%',
+                      bgcolor: isFetchingCount > 0 ? '#F59E0B' : '#10B981',
+                      boxShadow: isFetchingCount > 0 ? '0 0 8px #F59E0B' : '0 0 8px #10B981',
+                      animation: isFetchingCount > 0 ? 'pulse 1s infinite' : 'none',
+                      '@keyframes pulse': {
+                        '0%': { transform: 'scale(0.8)', opacity: 0.7 },
+                        '50%': { transform: 'scale(1.2)', opacity: 1 },
+                        '100%': { transform: 'scale(0.8)', opacity: 0.7 },
+                      },
+                      ml: '6px !important',
+                    }}
+                  />
+                }
+                label={
+                  isFetchingCount > 0
+                    ? 'Syncing...'
+                    : secondsAgo < 5
+                    ? 'Live Sync'
+                    : `Sync (${secondsAgo}s)`
+                }
+                sx={{
+                  fontWeight: 700,
+                  fontSize: 11,
+                  height: 26,
+                  bgcolor: alpha(isFetchingCount > 0 ? '#F59E0B' : '#10B981', 0.12),
+                  color: isFetchingCount > 0 ? '#D97706' : '#059669',
+                  border: '1px solid',
+                  borderColor: alpha(isFetchingCount > 0 ? '#F59E0B' : '#10B981', 0.3),
+                  display: { xs: 'none', sm: 'inline-flex' },
+                }}
+              />
+            </Tooltip>
+
+            {/* Manual Refresh Button */}
+            <Tooltip title="Refresh all data now">
+              <IconButton
+                onClick={handleRefreshAll}
+                size="small"
+                sx={{
+                  color: 'text.secondary',
+                  '&:hover': { color: 'primary.main', bgcolor: alpha(theme.palette.primary.main, 0.08) },
+                }}
+              >
+                {isFetchingCount > 0 ? (
+                  <CircularProgress size={18} color="inherit" />
+                ) : (
+                  <RefreshIcon
+                    fontSize="small"
+                    sx={{
+                      transition: 'transform 0.3s',
+                      '&:hover': { transform: 'rotate(180deg)' },
+                    }}
+                  />
+                )}
+              </IconButton>
+            </Tooltip>
 
             <Tooltip title={isDark ? 'Light Mode' : 'Dark Mode'}>
               <IconButton onClick={onToggleTheme} sx={{ color: 'text.secondary' }}>

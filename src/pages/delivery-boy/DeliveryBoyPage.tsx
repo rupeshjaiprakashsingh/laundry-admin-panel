@@ -205,9 +205,13 @@ const PickupCard: React.FC<{
               </Box>
               <Box>
                 <Typography sx={{ fontWeight: 800, fontSize: 13, color: '#1E1B4B' }}>
-                  Pickup #{pickup.id}
+                  {pickup.order?.orderNumber ? `Order #${pickup.order.orderNumber}` : `Pickup #${pickup.id}`}
                 </Typography>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <Typography sx={{ fontSize: 11, color: '#4F46E5', fontWeight: 700 }}>
+                    Pickup #{pickup.id}
+                  </Typography>
+                  <Typography sx={{ fontSize: 11, color: '#6B7280' }}>•</Typography>
                   <AccessTimeIcon sx={{ fontSize: 11, color: '#6B7280' }} />
                   <Typography sx={{ fontSize: 11, color: '#6B7280' }}>
                     {formatPickupDate(pickup.pickupDate, pickup.pickupTime)}
@@ -228,6 +232,30 @@ const PickupCard: React.FC<{
 
           {/* Customer Info */}
           <Box sx={{ px: 2, pt: 1.5, pb: 0.5 }}>
+            {/* Prominent Order No Badge */}
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                px: 1.5,
+                py: 0.75,
+                mb: 1.25,
+                bgcolor: '#EEF2FF',
+                borderRadius: 2,
+                border: '1px solid #C7D2FE',
+              }}
+            >
+              <Typography sx={{ fontSize: 12, fontWeight: 800, color: '#312E81', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                📦 Order No: <span style={{ color: '#4F46E5', fontWeight: 900 }}>{pickup.order?.orderNumber || `ORD-${String(pickup.id).padStart(5, '0')}`}</span>
+              </Typography>
+              <Chip
+                label={`Pickup #${pickup.id}`}
+                size="small"
+                sx={{ height: 20, fontSize: 10, fontWeight: 700, bgcolor: '#E0E7FF', color: '#4338CA' }}
+              />
+            </Box>
+
             <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 1 }}>
               <Box sx={{ flex: 1 }}>
                 <Typography sx={{ fontWeight: 800, fontSize: 16, color: '#111827', mb: 0.25 }}>
@@ -433,8 +461,8 @@ const PickupCard: React.FC<{
         <DialogContent>
           <Typography variant="body2" color="text.secondary">
             {confirmDialog?.status === 'Completed'
-              ? `Confirm that you have collected the clothes from ${pickup.customer.firstName} ${pickup.customer.lastName}?`
-              : `Are you sure you want to cancel pickup #${pickup.id}?`}
+              ? `Confirm that you have collected the clothes for Order #${pickup.order?.orderNumber || `ORD-${String(pickup.id).padStart(5, '0')}`} from ${pickup.customer.firstName} ${pickup.customer.lastName}?`
+              : `Are you sure you want to cancel pickup #${pickup.id} (Order #${pickup.order?.orderNumber || `ORD-${String(pickup.id).padStart(5, '0')}`})?`}
           </Typography>
 
           {confirmDialog?.status === 'Completed' && (
@@ -455,19 +483,6 @@ const PickupCard: React.FC<{
                     {...params}
                     label="Search & Select Laundry Shop"
                     slotProps={{
-                      input: {
-                        ...params.InputProps,
-                        sx: {
-                          color: '#0F172A !important',
-                          bgcolor: '#FFFFFF !important',
-                          fontWeight: 600,
-                          fontSize: 14,
-                          '& input': {
-                            color: '#0F172A !important',
-                            WebkitTextFillColor: '#0F172A !important',
-                          },
-                        },
-                      },
                       inputLabel: {
                         sx: {
                           color: '#475569 !important',
@@ -481,9 +496,16 @@ const PickupCard: React.FC<{
                       borderRadius: 1,
                       '& .MuiOutlinedInput-root': {
                         bgcolor: '#FFFFFF !important',
+                        color: '#0F172A !important',
+                        fontWeight: 600,
+                        fontSize: 14,
                         '& fieldset': { borderColor: '#CBD5E1', borderWidth: 1.5 },
                         '&:hover fieldset': { borderColor: '#4F46E5' },
                         '&.Mui-focused fieldset': { borderColor: '#4F46E5' },
+                      },
+                      '& input': {
+                        color: '#0F172A !important',
+                        WebkitTextFillColor: '#0F172A !important',
                       },
                     }}
                   />
@@ -664,7 +686,7 @@ const PickupCard: React.FC<{
 
 const DeliveryCard: React.FC<{
   delivery: DeliveryAssignment;
-  onAction: (id: number, status: string, remarks?: string, otp?: string) => void;
+  onAction: (id: number, status: string, remarks?: string, otp?: string, paymentMode?: string) => void;
   isLoading: boolean;
 }> = ({ delivery, onAction, isLoading }) => {
   const [expanded, setExpanded] = useState(false);
@@ -673,6 +695,7 @@ const DeliveryCard: React.FC<{
   const [otpSent, setOtpSent] = useState(false);
   const [requestingOtp, setRequestingOtp] = useState(false);
   const [otpError, setOtpError] = useState('');
+  const [collectedPaymentMode, setCollectedPaymentMode] = useState<string>('Cash');
 
   const handleRequestOtp = async () => {
     setRequestingOtp(true);
@@ -733,11 +756,13 @@ const DeliveryCard: React.FC<{
               </Box>
               <Box>
                 <Typography sx={{ fontWeight: 800, fontSize: 13, color: '#78350F' }}>
-                  {delivery.order?.orderNumber ?? `Delivery #${delivery.id}`}
+                  {delivery.order?.orderNumber ? `Order #${delivery.order.orderNumber}` : `Delivery #${delivery.id}`}
                 </Typography>
-                <Typography sx={{ fontSize: 11, color: '#92400E' }}>
-                  Delivery #{delivery.id}
-                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <Typography sx={{ fontSize: 11, color: '#B45309', fontWeight: 700 }}>
+                    Delivery #{delivery.id}
+                  </Typography>
+                </Box>
               </Box>
             </Box>
             <Chip
@@ -752,6 +777,30 @@ const DeliveryCard: React.FC<{
 
           {/* Customer Info */}
           <Box sx={{ px: 2, pt: 1.5, pb: 0.5 }}>
+            {/* Prominent Order No Badge */}
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                px: 1.5,
+                py: 0.75,
+                mb: 1.25,
+                bgcolor: '#FEF3C7',
+                borderRadius: 2,
+                border: '1px solid #FDE68A',
+              }}
+            >
+              <Typography sx={{ fontSize: 12, fontWeight: 800, color: '#78350F', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                📦 Order No: <span style={{ color: '#D97706', fontWeight: 900 }}>{delivery.order?.orderNumber || `ORD-${String(delivery.orderId).padStart(5, '0')}`}</span>
+              </Typography>
+              <Chip
+                label={`Delivery #${delivery.id}`}
+                size="small"
+                sx={{ height: 20, fontSize: 10, fontWeight: 700, bgcolor: '#FDE68A', color: '#92400E' }}
+              />
+            </Box>
+
             {customer && (
               <>
                 <Typography sx={{ fontWeight: 800, fontSize: 16, color: '#111827', mb: 0.25 }}>
@@ -957,8 +1006,8 @@ const DeliveryCard: React.FC<{
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             {confirmDialog?.status === 'Delivered'
-              ? `Confirm that you have delivered the order ${delivery.order?.orderNumber} to ${customer?.firstName} ${customer?.lastName}?`
-              : `Mark this delivery as failed? The order will return to "Laundry" status.`}
+              ? `Confirm that you have delivered Order #${delivery.order?.orderNumber || `ORD-${String(delivery.orderId).padStart(5, '0')}`} (Delivery #${delivery.id}) to ${customer?.firstName} ${customer?.lastName}?`
+              : `Mark this delivery as failed? Order #${delivery.order?.orderNumber || `ORD-${String(delivery.orderId).padStart(5, '0')}`} will return to "Laundry" status.`}
           </Typography>
 
           {confirmDialog?.status === 'Delivered' && (
@@ -971,11 +1020,32 @@ const DeliveryCard: React.FC<{
                   }}
                 >
                   <Typography sx={{ fontWeight: 800, fontSize: 13, color: '#B45309', mb: 0.5, display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    💵 COD Cash Collection Required
+                    💵 Payment Collection Required
                   </Typography>
-                  <Typography sx={{ fontSize: 12, color: '#92400E', fontWeight: 600 }}>
-                    Please collect <strong>₹{delivery.order?.netAmount ? delivery.order.netAmount.toFixed(0) : '0'}</strong> from {customer?.firstName} {customer?.lastName} in Cash / UPI before completing delivery.
+                  <Typography sx={{ fontSize: 12, color: '#92400E', fontWeight: 600, mb: 1.5 }}>
+                    Please collect <strong>₹{delivery.order?.netAmount ? delivery.order.netAmount.toFixed(0) : '0'}</strong> from {customer?.firstName} {customer?.lastName}.
                   </Typography>
+
+                  <Typography variant="caption" sx={{ fontWeight: 700, color: '#78350F', display: 'block', mb: 0.5 }}>
+                    Select Payment Mode Collected:
+                  </Typography>
+                  <FormControl fullWidth size="small">
+                    <Select
+                      value={collectedPaymentMode}
+                      onChange={(e) => setCollectedPaymentMode(e.target.value)}
+                      sx={{
+                        bgcolor: '#FFFFFF !important',
+                        color: '#0F172A !important',
+                        fontWeight: 700,
+                        fontSize: 13,
+                        '& .MuiOutlinedInput-notchedOutline': { borderColor: '#F59E0B' },
+                      }}
+                    >
+                      <MenuItem value="Cash">💵 Paid in Cash</MenuItem>
+                      <MenuItem value="GPay">📱 Paid in GPay (Google Pay)</MenuItem>
+                      <MenuItem value="UPI">📱 Paid in UPI / QR Code</MenuItem>
+                    </Select>
+                  </FormControl>
                 </Box>
               ) : (
                 <Box
@@ -1063,7 +1133,20 @@ const DeliveryCard: React.FC<{
           <Button
             variant="contained"
             disabled={isLoading || (confirmDialog?.status === 'Delivered' && (!otpSent || enteredOtp.length !== 6))}
-            onClick={() => { if (confirmDialog) { onAction(delivery.id, confirmDialog.status, undefined, enteredOtp || undefined); setConfirmDialog(null); setOtpSent(false); setEnteredOtp(''); } }}
+            onClick={() => {
+              if (confirmDialog) {
+                onAction(
+                  delivery.id,
+                  confirmDialog.status,
+                  undefined,
+                  enteredOtp || undefined,
+                  delivery.order?.paymentStatus === 'Paid' ? undefined : collectedPaymentMode
+                );
+                setConfirmDialog(null);
+                setOtpSent(false);
+                setEnteredOtp('');
+              }
+            }}
             sx={{
               borderRadius: 2, textTransform: 'none', fontWeight: 700,
               bgcolor: confirmDialog?.status === 'Delivered' ? '#10B981' : '#EF4444',
@@ -1219,6 +1302,7 @@ const DeliveryBoyPage: React.FC = () => {
       const lastName = cust?.lastName?.toLowerCase() || '';
       const mobile = cust?.mobileNumber || '';
       const addr = p.pickupAddress?.toLowerCase() || '';
+      const orderNum = p.order?.orderNumber?.toLowerCase() || '';
       const pickupIdStr = String(p.id);
 
       return firstName.includes(query) ||
@@ -1226,6 +1310,7 @@ const DeliveryBoyPage: React.FC = () => {
              `${firstName} ${lastName}`.includes(query) ||
              mobile.includes(query) ||
              addr.includes(query) ||
+             orderNum.includes(query) ||
              pickupIdStr.includes(query);
     });
   }, [pickups, searchQuery]);
@@ -1263,8 +1348,8 @@ const DeliveryBoyPage: React.FC = () => {
   });
 
   const deliveryMutation = useMutation({
-    mutationFn: ({ id, status, remarks, otp }: { id: number; status: string; remarks?: string; otp?: string }) =>
-      updateMyDeliveryStatus(id, status, remarks, otp),
+    mutationFn: ({ id, status, remarks, otp, paymentMode }: { id: number; status: string; remarks?: string; otp?: string; paymentMode?: string }) =>
+      updateMyDeliveryStatus(id, status, remarks, otp, paymentMode),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['my-deliveries'] });
       setToast({ msg: 'Delivery status updated!', severity: 'success' });
@@ -1542,7 +1627,7 @@ const DeliveryBoyPage: React.FC = () => {
                 <DeliveryCard
                   key={delivery.id}
                   delivery={delivery}
-                  onAction={(id, status, remarks, otp) => deliveryMutation.mutate({ id, status, remarks, otp })}
+                  onAction={(id, status, remarks, otp, paymentMode) => deliveryMutation.mutate({ id, status, remarks, otp, paymentMode })}
                   isLoading={deliveryMutation.isPending}
                 />
               ))

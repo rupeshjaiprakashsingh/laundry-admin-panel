@@ -173,6 +173,7 @@ const DeliveriesPage: React.FC = () => {
         orderNumber: o.orderNumber,
         customer: o.customer,
         orderId: o.id,
+        order: o,
       }];
     }), [orders]);
 
@@ -210,6 +211,29 @@ const DeliveriesPage: React.FC = () => {
     {
       field: 'deliveryStatus', headerName: 'Status', width: 150,
       renderCell: (p) => <Chip label={p.value} color={deliveryColors[p.value] ?? 'default'} size="small" sx={{ fontWeight: 700 }} />,
+    },
+    {
+      field: 'payment', headerName: 'Payment', width: 160,
+      renderCell: (p) => {
+        const order = p.row.order;
+        if (!order) return <Typography sx={{ fontSize: 11, color: 'text.disabled' }}>—</Typography>;
+        const latestPayment = order.payments && order.payments.length > 0 ? order.payments[order.payments.length - 1] : null;
+        let mode = latestPayment?.paymentMode;
+        if (!mode && order.notes) {
+          const lower = order.notes.toLowerCase();
+          if (lower.includes('gpay') || lower.includes('google pay')) mode = 'GPay';
+          else if (lower.includes('upi') || lower.includes('qr')) mode = 'UPI';
+          else if (lower.includes('cash') || lower.includes('cod')) mode = 'Cash';
+        }
+        const isPaid = order.paymentStatus === 'Paid';
+        if (isPaid) {
+          const resolvedMode = mode || 'Cash';
+          if (resolvedMode === 'GPay') return <Chip label="📱 Paid in GPay" size="small" sx={{ fontWeight: 800, bgcolor: '#EEF2FF', color: '#4338CA', border: '1px solid #C7D2FE', fontSize: 11 }} />;
+          if (resolvedMode === 'UPI') return <Chip label="📱 Paid in UPI" size="small" sx={{ fontWeight: 800, bgcolor: '#F3E8FF', color: '#7E22CE', border: '1px solid #E9D5FF', fontSize: 11 }} />;
+          return <Chip label="💵 Paid in Cash" size="small" sx={{ fontWeight: 800, bgcolor: '#ECFDF5', color: '#047857', border: '1px solid #A7F3D0', fontSize: 11 }} />;
+        }
+        return <Chip label="⏳ Pending" size="small" sx={{ fontWeight: 700, bgcolor: '#FFFBEB', color: '#B45309', border: '1px solid #FDE68A', fontSize: 11 }} />;
+      },
     },
     {
       field: 'deliveryEmployee', headerName: 'Delivery Boy', width: 160,

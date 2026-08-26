@@ -29,7 +29,6 @@ const DashboardPage: React.FC = () => {
   const { data, isLoading, error } = useQuery({
     queryKey: ['dashboard'],
     queryFn: getDashboardStats,
-    refetchInterval: 60000,
   });
   const { data: laundryShops = [] } = useQuery({
     queryKey: ['laundry-shops'],

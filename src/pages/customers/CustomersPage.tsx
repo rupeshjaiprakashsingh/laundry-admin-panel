@@ -101,7 +101,7 @@ const CustomersPage: React.FC = () => {
       />
 
       <Card sx={{ mb: 2, p: 2 }}>
-        <Stack direction="row" spacing={2} alignItems="center">
+        <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
           <TextField
             size="small" placeholder="Search by name, mobile, email, code..." fullWidth
             value={search} onChange={(e) => setSearch(e.target.value)}

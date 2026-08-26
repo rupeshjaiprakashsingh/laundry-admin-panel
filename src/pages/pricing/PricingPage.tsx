@@ -34,12 +34,20 @@ const PricingPage: React.FC = () => {
   const [editPrice, setEditPrice] = useState<ServicePrice | null>(null);
   const [deletePriceId, setDeletePriceId] = useState<number | null>(null);
   const [newPrice, setNewPrice] = useState<Partial<ServicePrice>>({});
+  const [serviceFilter, setServiceFilter] = useState<number | 'ALL'>('ALL');
 
   const [snack, setSnack] = useState<{ msg: string; severity: 'success' | 'error' } | null>(null);
 
   const { data: products = [], isLoading: pLoading } = useQuery<Product[]>({ queryKey: ['products'], queryFn: getProducts });
   const { data: prices = [], isLoading: prLoading } = useQuery<ServicePrice[]>({ queryKey: ['service-prices'], queryFn: getServicePrices });
   const { data: services = [] } = useQuery<Service[]>({ queryKey: ['services'], queryFn: getServices });
+
+  const filteredPrices = prices.filter((p) => {
+    if (serviceFilter === 'ALL') return true;
+    return p.serviceId === serviceFilter;
+  });
+
+  const priorityService = services.find((s) => s.serviceName.toLowerCase().includes('priority'));
 
   const createProductMutation = useMutation({
     mutationFn: createProduct,
@@ -135,8 +143,31 @@ const PricingPage: React.FC = () => {
   ];
 
   const priceColumns: GridColDef[] = [
-    { field: 'service', headerName: 'Service', width: 160, renderCell: (p) => <Chip label={(p.value as Service)?.serviceName} color="primary" size="small" /> },
-    { field: 'product', headerName: 'Product', width: 160, renderCell: (p) => <Typography>{(p.value as Product)?.emoji} {(p.value as Product)?.name}</Typography> },
+    {
+      field: 'service',
+      headerName: 'Service',
+      width: 180,
+      renderCell: (p) => {
+        const sName = (p.value as Service)?.serviceName || '';
+        const isPriority = sName.toLowerCase().includes('priority');
+        if (isPriority) {
+          return (
+            <Chip
+              label={`⚡ ${sName}`}
+              size="small"
+              sx={{
+                fontWeight: 700,
+                bgcolor: '#FFF7ED',
+                color: '#EA580C',
+                border: '1px solid #FED7AA',
+              }}
+            />
+          );
+        }
+        return <Chip label={sName} color="primary" size="small" sx={{ fontWeight: 600 }} />;
+      },
+    },
+    { field: 'product', headerName: 'Product', width: 180, renderCell: (p) => <Typography>{(p.value as Product)?.emoji} {(p.value as Product)?.name}</Typography> },
     { field: 'pincode', headerName: 'Pincode', width: 130, renderCell: (p) => <Chip label={p.value} size="small" color={p.value === 'DEFAULT' ? 'secondary' : 'default'} /> },
     { field: 'price', headerName: 'Price', width: 120, renderCell: (p) => <Typography sx={{ fontWeight: 700, color: 'success.main' }}>{formatCurrency(p.value)}</Typography> },
     { field: 'isActive', headerName: 'Status', width: 90, renderCell: (p) => <Chip label={p.value ? 'Active' : 'Inactive'} color={p.value ? 'success' : 'error'} size="small" /> },
@@ -155,11 +186,11 @@ const PricingPage: React.FC = () => {
     <Box>
       <PageHeader
         title="Pricing Management"
-        subtitle="Manage products and pincode-based service prices"
+        subtitle="Manage products and pincode-based service prices (including Grivana Priority separate rates)"
         breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Pricing' }]}
         action={tab === 0
           ? { label: 'Add Product', icon: <AddIcon />, onClick: () => { setEditProduct(null); setProductName(''); setProductEmoji('👕'); setProductFormOpen(true); } }
-          : { label: 'Add Price Rule', icon: <AddIcon />, onClick: () => { setEditPrice(null); setNewPrice({}); setPriceFormOpen(true); } }
+          : { label: 'Add Price Rule', icon: <AddIcon />, onClick: () => { setEditPrice(null); setNewPrice({ pincode: 'DEFAULT' }); setPriceFormOpen(true); } }
         }
       />
 
@@ -179,13 +210,66 @@ const PricingPage: React.FC = () => {
       )}
 
       {tab === 1 && (
-        <Card>
-          <DataGrid rows={prices} columns={priceColumns} loading={prLoading} autoHeight
-            pageSizeOptions={[10, 25, 50]} disableRowSelectionOnClick
-            initialState={{ pagination: { paginationModel: { pageSize: 10 } } }}
-            sx={{ border: 'none' }}
-          />
-        </Card>
+        <Box>
+          <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <FormControl size="small" sx={{ minWidth: 220 }}>
+                <InputLabel>Filter by Service</InputLabel>
+                <Select
+                  value={serviceFilter}
+                  label="Filter by Service"
+                  onChange={(e) => setServiceFilter(e.target.value as any)}
+                >
+                  <MenuItem value="ALL">All Services ({prices.length})</MenuItem>
+                  {services.map((s) => (
+                    <MenuItem key={s.id} value={s.id}>
+                      {s.serviceName.toLowerCase().includes('priority') ? `⚡ ${s.serviceName}` : s.serviceName}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              {priorityService && (
+                <Button
+                  size="small"
+                  variant={serviceFilter === priorityService.id ? 'contained' : 'outlined'}
+                  color="warning"
+                  onClick={() => setServiceFilter(serviceFilter === priorityService.id ? 'ALL' : priorityService.id)}
+                  sx={{ fontWeight: 700, textTransform: 'none' }}
+                >
+                  ⚡ View Grivana Priority Rates
+                </Button>
+              )}
+            </Box>
+            {priorityService && (
+              <Button
+                size="small"
+                variant="outlined"
+                color="warning"
+                startIcon={<AddIcon />}
+                onClick={() => {
+                  setEditPrice(null);
+                  setNewPrice({
+                    serviceId: priorityService.id,
+                    productId: products[0]?.id || 0,
+                    pincode: 'DEFAULT',
+                    price: 30,
+                  });
+                  setPriceFormOpen(true);
+                }}
+                sx={{ fontWeight: 700, textTransform: 'none' }}
+              >
+                + Add Priority Price
+              </Button>
+            )}
+          </Box>
+          <Card>
+            <DataGrid rows={filteredPrices} columns={priceColumns} loading={prLoading} autoHeight
+              pageSizeOptions={[10, 25, 50]} disableRowSelectionOnClick
+              initialState={{ pagination: { paginationModel: { pageSize: 10 } } }}
+              sx={{ border: 'none' }}
+            />
+          </Card>
+        </Box>
       )}
 
       {/* Product Form */}
@@ -212,14 +296,18 @@ const PricingPage: React.FC = () => {
 
       {/* Price Rule Form */}
       <Dialog open={priceFormOpen} onClose={() => { setPriceFormOpen(false); setEditPrice(null); }} maxWidth="sm" fullWidth>
-        <DialogTitle>{editPrice ? 'Edit Price Rule' : 'Add Price Rule'}</DialogTitle>
+        <DialogTitle>{editPrice ? 'Edit Price Rule' : '➕ Add Price Rule'}</DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 0.5 }}>
             <Grid size={{ xs: 12, sm: 6 }}>
               <FormControl fullWidth size="small">
                 <InputLabel>Service</InputLabel>
                 <Select value={newPrice.serviceId ?? ''} label="Service" onChange={(e) => setNewPrice((p) => ({ ...p, serviceId: Number(e.target.value) }))}>
-                  {services.map((s) => <MenuItem key={s.id} value={s.id}>{s.serviceName}</MenuItem>)}
+                  {services.map((s) => (
+                    <MenuItem key={s.id} value={s.id}>
+                      {s.serviceName.toLowerCase().includes('priority') ? `⚡ ${s.serviceName}` : s.serviceName}
+                    </MenuItem>
+                  ))}
                 </Select>
               </FormControl>
             </Grid>
@@ -234,7 +322,7 @@ const PricingPage: React.FC = () => {
             <Grid size={{ xs: 12, sm: 6 }}>
               <TextField label="Pincode (or DEFAULT)" fullWidth size="small"
                 value={newPrice.pincode ?? ''} onChange={(e) => setNewPrice((p) => ({ ...p, pincode: e.target.value }))}
-                placeholder="DEFAULT or 400001" />
+                placeholder="DEFAULT or 500001" />
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
               <TextField label="Price (₹)" type="number" fullWidth size="small"

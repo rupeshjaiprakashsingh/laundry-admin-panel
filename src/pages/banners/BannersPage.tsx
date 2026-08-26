@@ -218,7 +218,7 @@ const BannersPage: React.FC = () => {
             
             <Stack spacing={1}>
               <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>Banner Image *</Typography>
-              <Stack direction="row" spacing={2} alignItems="center">
+              <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
                 <Button
                   variant="outlined"
                   component="label"

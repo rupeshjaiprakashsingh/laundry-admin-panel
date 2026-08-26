@@ -23,7 +23,7 @@ import {
 import { formatCurrency } from '../../utils/export';
 import type { Service, Product, ServicePrice } from '../../types';
 
-const SERVICE_TYPES = ['Washing', 'Dry Cleaning', 'Ironing', 'Other'];
+const SERVICE_TYPES = ['Washing', 'Dry Cleaning', 'Ironing', 'Grivana Priority', 'Other'];
 
 const emptyService = {
   serviceName: '',
@@ -89,7 +89,29 @@ const ServicesTab: React.FC = () => {
 
   const columns: GridColDef[] = [
     { field: 'serviceName', headerName: 'Service Name', flex: 1, minWidth: 160, renderCell: (p) => <Typography sx={{ fontWeight: 700, fontSize: 13 }}>{p.value}</Typography> },
-    { field: 'serviceType', headerName: 'Type', width: 140, renderCell: (p) => <Chip label={p.value} size="small" color="primary" sx={{ fontWeight: 600 }} /> },
+    {
+      field: 'serviceType',
+      headerName: 'Type',
+      width: 170,
+      renderCell: (p) => {
+        const isPriority = String(p.value || '').toLowerCase().includes('priority');
+        if (isPriority) {
+          return (
+            <Chip
+              label={`⚡ ${p.value}`}
+              size="small"
+              sx={{
+                fontWeight: 700,
+                bgcolor: '#FFF7ED',
+                color: '#EA580C',
+                border: '1px solid #FED7AA',
+              }}
+            />
+          );
+        }
+        return <Chip label={p.value} size="small" color="primary" sx={{ fontWeight: 600 }} />;
+      },
+    },
     { field: 'price', headerName: 'Base Price', width: 120, renderCell: (p) => <Typography sx={{ fontWeight: 700, color: 'success.main' }}>{formatCurrency(p.value)}</Typography> },
     { field: 'estimatedHours', headerName: 'Est. Hours', width: 110, renderCell: (p) => p.value ? `${p.value}h` : '—' },
     { field: 'description', headerName: 'Description', flex: 1, renderCell: (p) => <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>{p.value || '—'}</Typography> },
@@ -128,7 +150,7 @@ const ServicesTab: React.FC = () => {
             <Grid size={{ xs: 12, sm: 7 }}>
               <TextField fullWidth size="small" label="Service Name *" value={form.serviceName}
                 onChange={(e) => setForm({ ...form, serviceName: e.target.value })}
-                placeholder="e.g. Premium Laundry" />
+                placeholder="e.g. Grivana Priority or Premium Laundry" />
             </Grid>
             <Grid size={{ xs: 12, sm: 5 }}>
               <FormControl fullWidth size="small">
@@ -138,6 +160,13 @@ const ServicesTab: React.FC = () => {
                 </Select>
               </FormControl>
             </Grid>
+            {form.serviceType === 'Grivana Priority' && (
+              <Grid size={{ xs: 12 }}>
+                <Alert severity="info" sx={{ fontSize: 12, bgcolor: '#FFF7ED', color: '#9A3412', border: '1px solid #FED7AA' }}>
+                  ⚡ <strong>Grivana Priority Logic:</strong> Morning pickups before 11:00 AM, daily limit of 25 orders, fixed ₹30 delivery fee, and custom per-product rates in the Pricing tab.
+                </Alert>
+              </Grid>
+            )}
             <Grid size={{ xs: 12, sm: 6 }}>
               <TextField fullWidth size="small" label="Base Price (₹) *" type="number" value={form.price}
                 onChange={(e) => setForm({ ...form, price: parseFloat(e.target.value) || 0 })} />
@@ -149,7 +178,7 @@ const ServicesTab: React.FC = () => {
             <Grid size={{ xs: 12 }}>
               <TextField fullWidth size="small" label="Description" multiline rows={2} value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
-                placeholder="e.g. ₹79 / kg | 48 Hrs" />
+                placeholder="e.g. Express Morning Pickup before 11 AM | Fast Delivery" />
             </Grid>
             <Grid size={{ xs: 12 }}>
               <FormControl fullWidth size="small">
@@ -337,11 +366,17 @@ const PricingTab: React.FC = () => {
   const [editPrice, setEditPrice] = useState<ServicePrice | null>(null);
   const [form, setForm] = useState({ serviceId: 0, productId: 0, pincode: 'DEFAULT', price: 0, isActive: true });
   const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [serviceFilter, setServiceFilter] = useState<number | 'ALL'>('ALL');
   const [snack, setSnack] = useState<{ open: boolean; msg: string; severity: 'success' | 'error' }>({ open: false, msg: '', severity: 'success' });
 
   const { data: prices = [], isLoading, error } = useQuery({ queryKey: ['service-prices'], queryFn: getServicePrices });
   const { data: services = [] } = useQuery({ queryKey: ['services'], queryFn: getServices });
   const { data: products = [] } = useQuery({ queryKey: ['products'], queryFn: getProducts });
+
+  const filteredPrices = prices.filter((p) => {
+    if (serviceFilter === 'ALL') return true;
+    return p.serviceId === serviceFilter;
+  });
 
   const createMutation = useMutation({
     mutationFn: (data: typeof form) => createServicePrice(data),
@@ -366,7 +401,30 @@ const PricingTab: React.FC = () => {
   };
 
   const columns: GridColDef[] = [
-    { field: 'service', headerName: 'Service', flex: 1, renderCell: (p) => <Typography sx={{ fontWeight: 700, fontSize: 13 }}>{p.row.service?.serviceName || '—'}</Typography> },
+    {
+      field: 'service',
+      headerName: 'Service',
+      flex: 1,
+      renderCell: (p) => {
+        const sName = p.row.service?.serviceName || '—';
+        const isPriority = sName.toLowerCase().includes('priority');
+        if (isPriority) {
+          return (
+            <Chip
+              label={`⚡ ${sName}`}
+              size="small"
+              sx={{
+                fontWeight: 700,
+                bgcolor: '#FFF7ED',
+                color: '#EA580C',
+                border: '1px solid #FED7AA',
+              }}
+            />
+          );
+        }
+        return <Typography sx={{ fontWeight: 700, fontSize: 13 }}>{sName}</Typography>;
+      },
+    },
     { field: 'product', headerName: 'Product', flex: 1, renderCell: (p) => <Typography sx={{ fontSize: 13 }}>{p.row.product?.emoji} {p.row.product?.name || '—'}</Typography> },
     { field: 'pincode', headerName: 'Pincode', width: 120, renderCell: (p) => <Chip label={p.value} size="small" color={p.value === 'DEFAULT' ? 'default' : 'primary'} /> },
     { field: 'price', headerName: 'Price', width: 110, renderCell: (p) => <Typography sx={{ fontWeight: 700, color: 'success.main' }}>{formatCurrency(p.value)}</Typography> },
@@ -388,22 +446,74 @@ const PricingTab: React.FC = () => {
 
   if (error) return <Alert severity="error">Failed to load pricing.</Alert>;
 
+  const priorityService = services.find((s) => s.serviceName.toLowerCase().includes('priority'));
+
   return (
     <Box>
       <Alert severity="info" sx={{ mb: 2 }}>
-        <strong>Pricing</strong> maps a Service + Product + Pincode → Price.
-        Use pincode <strong>DEFAULT</strong> for the standard price (applies to all locations unless overridden).
-        Pincode-specific prices override DEFAULT for customers in that area.
+        <strong>Pricing Matrix:</strong> Maps a Service + Product (Cloth Type) + Pincode → Specific Price.
+        Each service (including <strong>⚡ Grivana Priority</strong>, <strong>Dry Cleaning</strong>, <strong>Ironing</strong>, and <strong>Washing</strong>) can have separate custom rates per cloth type.
       </Alert>
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => {
-          setEditPrice(null);
-          setForm({ serviceId: services[0]?.id || 0, productId: products[0]?.id || 0, pincode: 'DEFAULT', price: 0, isActive: true });
-          setFormOpen(true);
-        }}>Add Price</Button>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <FormControl size="small" sx={{ minWidth: 200 }}>
+            <InputLabel>Filter by Service</InputLabel>
+            <Select
+              value={serviceFilter}
+              label="Filter by Service"
+              onChange={(e) => setServiceFilter(e.target.value as any)}
+            >
+              <MenuItem value="ALL">All Services ({prices.length} rules)</MenuItem>
+              {services.map((s) => (
+                <MenuItem key={s.id} value={s.id}>
+                  {s.serviceName.toLowerCase().includes('priority') ? `⚡ ${s.serviceName}` : s.serviceName}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          {priorityService && (
+            <Button
+              size="small"
+              variant={serviceFilter === priorityService.id ? 'contained' : 'outlined'}
+              color="warning"
+              onClick={() => setServiceFilter(serviceFilter === priorityService.id ? 'ALL' : priorityService.id)}
+              sx={{ fontWeight: 700, textTransform: 'none' }}
+            >
+              ⚡ View Grivana Priority Rates
+            </Button>
+          )}
+        </Box>
+        <Stack direction="row" spacing={1}>
+          {priorityService && (
+            <Button
+              variant="outlined"
+              color="warning"
+              startIcon={<AddIcon />}
+              onClick={() => {
+                setEditPrice(null);
+                setForm({
+                  serviceId: priorityService.id,
+                  productId: products[0]?.id || 0,
+                  pincode: 'DEFAULT',
+                  price: 30,
+                  isActive: true,
+                });
+                setFormOpen(true);
+              }}
+              sx={{ fontWeight: 700, textTransform: 'none' }}
+            >
+              + Add Priority Price
+            </Button>
+          )}
+          <Button variant="contained" startIcon={<AddIcon />} onClick={() => {
+            setEditPrice(null);
+            setForm({ serviceId: services[0]?.id || 0, productId: products[0]?.id || 0, pincode: 'DEFAULT', price: 0, isActive: true });
+            setFormOpen(true);
+          }}>Add Price</Button>
+        </Stack>
       </Box>
       <Card>
-        <DataGrid rows={prices} columns={columns} loading={isLoading} autoHeight
+        <DataGrid rows={filteredPrices} columns={columns} loading={isLoading} autoHeight
           pageSizeOptions={[10, 25, 50]} disableRowSelectionOnClick
           initialState={{ pagination: { paginationModel: { pageSize: 10 } } }}
           sx={{ border: 'none' }}
@@ -411,14 +521,18 @@ const PricingTab: React.FC = () => {
       </Card>
 
       <Dialog open={formOpen} onClose={() => setFormOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ fontWeight: 700 }}>{editPrice ? 'Edit Price' : '➕ Add Price'}</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 700 }}>{editPrice ? 'Edit Price Rule' : '➕ Add Price Rule'}</DialogTitle>
         <DialogContent dividers>
           <Grid container spacing={2} sx={{ pt: 1 }}>
             <Grid size={{ xs: 12, sm: 6 }}>
               <FormControl fullWidth size="small" disabled={!!editPrice}>
                 <InputLabel>Service *</InputLabel>
                 <Select value={form.serviceId} label="Service *" onChange={(e) => setForm({ ...form, serviceId: Number(e.target.value) })}>
-                  {services.map((s: Service) => <MenuItem key={s.id} value={s.id}>{s.serviceName}</MenuItem>)}
+                  {services.map((s: Service) => (
+                    <MenuItem key={s.id} value={s.id}>
+                      {s.serviceName.toLowerCase().includes('priority') ? `⚡ ${s.serviceName}` : s.serviceName}
+                    </MenuItem>
+                  ))}
                 </Select>
               </FormControl>
             </Grid>
@@ -433,14 +547,14 @@ const PricingTab: React.FC = () => {
             <Grid size={{ xs: 12, sm: 6 }}>
               <TextField fullWidth size="small" label="Pincode (or DEFAULT)" value={form.pincode}
                 onChange={(e) => setForm({ ...form, pincode: e.target.value.trim().toUpperCase() })}
-                placeholder="DEFAULT or 400001" />
+                placeholder="DEFAULT or 500001" />
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
               <TextField fullWidth size="small" label="Price (₹) *" type="number" value={form.price}
                 onChange={(e) => setForm({ ...form, price: parseFloat(e.target.value) || 0 })} />
             </Grid>
             <Grid size={{ xs: 12 }}>
-              <FormControlLabel control={<Switch checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} />} label="Active" />
+              <FormControlLabel control={<Switch checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} />} label="Active (Available in Mobile App)" />
             </Grid>
           </Grid>
         </DialogContent>

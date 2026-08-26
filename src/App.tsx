@@ -25,7 +25,13 @@ import BannersPage from './pages/banners/BannersPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
-    queries: { retry: 1, staleTime: 30_000, refetchOnWindowFocus: false },
+    queries: {
+      retry: 1,
+      staleTime: 0,
+      refetchInterval: 5_000,              // Auto-refresh every 5s across all admin & delivery tabs
+      refetchIntervalInBackground: true,   // Keep auto-refresh active
+      refetchOnWindowFocus: 'always',      // Immediately refresh when switching tabs / windows
+    },
   },
 });
 

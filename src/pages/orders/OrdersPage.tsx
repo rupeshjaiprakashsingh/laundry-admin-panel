@@ -128,7 +128,38 @@ const OrdersPage: React.FC = () => {
   }), [orders, search, statusFilter]);
 
   const columns: GridColDef[] = [
-    { field: 'orderNumber', headerName: 'Order #', width: 140, renderCell: (p) => <Typography sx={{ fontWeight: 700, fontSize: 13 }}>{p.value}</Typography> },
+    {
+      field: 'orderNumber',
+      headerName: 'Order #',
+      width: 155,
+      renderCell: (p) => {
+        const isPriority = p.row.orderItems?.some((item: any) =>
+          (item.service?.serviceName || '').toLowerCase().includes('priority') ||
+          (item.service?.serviceType || '').toLowerCase().includes('priority')
+        ) || (p.row.notes && p.row.notes.toLowerCase().includes('priority'));
+
+        return (
+          <Box>
+            <Typography sx={{ fontWeight: 700, fontSize: 13 }}>{p.value}</Typography>
+            {isPriority && (
+              <Chip
+                label="⚡ Priority"
+                size="small"
+                sx={{
+                  height: 18,
+                  fontSize: 10,
+                  fontWeight: 800,
+                  bgcolor: '#FFF7ED',
+                  color: '#EA580C',
+                  border: '1px solid #FED7AA',
+                  mt: 0.25,
+                }}
+              />
+            )}
+          </Box>
+        );
+      },
+    },
     {
       field: 'customer', headerName: 'Customer', flex: 1, minWidth: 150,
       renderCell: (p) => (
@@ -140,7 +171,46 @@ const OrdersPage: React.FC = () => {
     },
     { field: 'createdDate', headerName: 'Date', width: 110, renderCell: (p) => formatDate(p.value) },
     { field: 'orderStatus', headerName: 'Status', width: 165, renderCell: (p) => <Chip label={p.value} color={statusColors[p.value] ?? 'default'} size="small" sx={{ fontWeight: 700 }} /> },
-    { field: 'paymentStatus', headerName: 'Payment', width: 120, renderCell: (p) => <Chip label={p.value} color={paymentColors[p.value] ?? 'default'} size="small" sx={{ fontWeight: 700 }} /> },
+    {
+      field: 'paymentStatus', headerName: 'Payment', width: 180,
+      renderCell: (p) => {
+        const row = p.row;
+        const latestPayment = row.payments && row.payments.length > 0 ? row.payments[row.payments.length - 1] : null;
+        let mode = latestPayment?.paymentMode;
+        if (!mode && row.notes) {
+          const lower = row.notes.toLowerCase();
+          if (lower.includes('gpay') || lower.includes('google pay')) mode = 'GPay';
+          else if (lower.includes('upi') || lower.includes('qr')) mode = 'UPI';
+          else if (lower.includes('cash') || lower.includes('cod')) mode = 'Cash';
+          else if (lower.includes('online')) mode = 'Online';
+          else if (lower.includes('card')) mode = 'Card';
+        }
+
+        const isPaid = row.paymentStatus === 'Paid';
+        if (isPaid) {
+          const resolvedMode = mode || 'Cash';
+          if (resolvedMode === 'GPay') {
+            return <Chip label="📱 Paid in GPay" size="small" sx={{ fontWeight: 800, bgcolor: '#EEF2FF', color: '#4338CA', border: '1px solid #C7D2FE' }} />;
+          }
+          if (resolvedMode === 'UPI') {
+            return <Chip label="📱 Paid in UPI" size="small" sx={{ fontWeight: 800, bgcolor: '#F3E8FF', color: '#7E22CE', border: '1px solid #E9D5FF' }} />;
+          }
+          if (resolvedMode === 'Online') {
+            return <Chip label="🌐 Paid Online" size="small" sx={{ fontWeight: 800, bgcolor: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE' }} />;
+          }
+          if (resolvedMode === 'Card') {
+            return <Chip label="💳 Paid by Card" size="small" sx={{ fontWeight: 800, bgcolor: '#ECFEFF', color: '#0E7490', border: '1px solid #A5F3FC' }} />;
+          }
+          return <Chip label="💵 Paid in Cash" size="small" sx={{ fontWeight: 800, bgcolor: '#ECFDF5', color: '#047857', border: '1px solid #A7F3D0' }} />;
+        }
+
+        if (row.paymentStatus === 'Partially Paid') {
+          return <Chip label="⚠️ Partially Paid" size="small" sx={{ fontWeight: 800, bgcolor: '#FEF3C7', color: '#B45309', border: '1px solid #FDE68A' }} />;
+        }
+
+        return <Chip label={mode ? `⏳ Pending (${mode})` : '⏳ Pending'} size="small" sx={{ fontWeight: 700, bgcolor: '#FFFBEB', color: '#B45309', border: '1px solid #FDE68A' }} />;
+      },
+    },
     {
       field: 'laundryShop', headerName: 'Laundry Shop', width: 160,
       renderCell: (p) => p.row.laundryShop ? (
@@ -167,21 +237,45 @@ const OrdersPage: React.FC = () => {
             setNewStatus(p.row.orderStatus);
             setNewPayment(p.row.paymentStatus);
             const lastPayment = p.row.payments && p.row.payments.length > 0 ? p.row.payments[p.row.payments.length - 1] : null;
-            setNewPaymentMode(lastPayment?.paymentMode || 'Cash');
+            let mode = lastPayment?.paymentMode;
+            if (!mode && p.row.notes) {
+              const lower = p.row.notes.toLowerCase();
+              if (lower.includes('gpay') || lower.includes('google pay')) mode = 'GPay';
+              else if (lower.includes('upi') || lower.includes('qr')) mode = 'UPI';
+              else if (lower.includes('cash') || lower.includes('cod')) mode = 'Cash';
+              else if (lower.includes('online')) mode = 'Online';
+              else if (lower.includes('card')) mode = 'Card';
+            }
+            setNewPaymentMode(mode || 'Cash');
           }}><EditIcon fontSize="small" /></IconButton></Tooltip>
         </Stack>
       ),
     },
   ];
 
+  const getOrderPaymentLabel = (o: Order) => {
+    const latestPayment = o.payments && o.payments.length > 0 ? o.payments[o.payments.length - 1] : null;
+    let mode = latestPayment?.paymentMode;
+    if (!mode && o.notes) {
+      const lower = o.notes.toLowerCase();
+      if (lower.includes('gpay') || lower.includes('google pay')) mode = 'GPay';
+      else if (lower.includes('upi') || lower.includes('qr')) mode = 'UPI';
+      else if (lower.includes('cash') || lower.includes('cod')) mode = 'Cash';
+    }
+    if (o.paymentStatus === 'Paid') {
+      return `Paid (${mode || 'Cash'})`;
+    }
+    return o.paymentStatus || 'Pending';
+  };
+
   const handleExcelExport = () => exportToExcel(
-    filtered.map((o) => ({ 'Order #': o.orderNumber, Customer: `${o.customer?.firstName} ${o.customer?.lastName}`, Date: formatDate(o.createdDate), Status: o.orderStatus, Payment: o.paymentStatus, 'Laundry Shop': o.laundryShop?.shopName ?? 'N/A', Amount: o.netAmount })),
+    filtered.map((o) => ({ 'Order #': o.orderNumber, Customer: `${o.customer?.firstName} ${o.customer?.lastName}`, Date: formatDate(o.createdDate), Status: o.orderStatus, Payment: getOrderPaymentLabel(o), 'Laundry Shop': o.laundryShop?.shopName ?? 'N/A', Amount: o.netAmount })),
     'orders'
   );
 
   const handlePdfExport = () => exportToPDF(
     'Orders Report', ['Order #', 'Customer', 'Date', 'Status', 'Payment', 'Laundry Shop', 'Amount'],
-    filtered.map((o) => [[o.orderNumber, `${o.customer?.firstName ?? ''} ${o.customer?.lastName ?? ''}`, formatDate(o.createdDate), o.orderStatus, o.paymentStatus, o.laundryShop?.shopName ?? 'N/A', formatCurrency(o.netAmount)]]),
+    filtered.map((o) => [[o.orderNumber, `${o.customer?.firstName ?? ''} ${o.customer?.lastName ?? ''}`, formatDate(o.createdDate), o.orderStatus, getOrderPaymentLabel(o), o.laundryShop?.shopName ?? 'N/A', formatCurrency(o.netAmount)]]),
     'orders'
   );
 
@@ -300,8 +394,31 @@ const OrdersPage: React.FC = () => {
                 <Box><Chip label={selectedOrder.orderStatus} color={statusColors[selectedOrder.orderStatus] ?? 'default'} size="small" /></Box>
               </Grid>
               <Grid size={{ xs: 12, sm: 4 }}>
-                <Typography variant="caption" color="text.secondary">Payment</Typography>
-                <Box><Chip label={selectedOrder.paymentStatus} color={paymentColors[selectedOrder.paymentStatus] ?? 'default'} size="small" /></Box>
+                <Typography variant="caption" color="text.secondary">Payment Status & Mode</Typography>
+                <Box sx={{ mt: 0.5 }}>
+                  {(() => {
+                    const latestPayment = selectedOrder.payments && selectedOrder.payments.length > 0 ? selectedOrder.payments[selectedOrder.payments.length - 1] : null;
+                    let mode = latestPayment?.paymentMode;
+                    if (!mode && selectedOrder.notes) {
+                      const lower = selectedOrder.notes.toLowerCase();
+                      if (lower.includes('gpay') || lower.includes('google pay')) mode = 'GPay';
+                      else if (lower.includes('upi') || lower.includes('qr')) mode = 'UPI';
+                      else if (lower.includes('cash') || lower.includes('cod')) mode = 'Cash';
+                      else if (lower.includes('online')) mode = 'Online';
+                      else if (lower.includes('card')) mode = 'Card';
+                    }
+                    const isPaid = selectedOrder.paymentStatus === 'Paid';
+                    const resolvedMode = mode || (isPaid ? 'Cash' : 'Pending');
+                    return (
+                      <Chip
+                        label={isPaid ? (resolvedMode === 'GPay' ? '📱 Paid in GPay' : resolvedMode === 'UPI' ? '📱 Paid in UPI' : resolvedMode === 'Cash' ? '💵 Paid in Cash' : `Paid in ${resolvedMode}`) : selectedOrder.paymentStatus}
+                        color={isPaid ? 'success' : 'warning'}
+                        size="small"
+                        sx={{ fontWeight: 800 }}
+                      />
+                    );
+                  })()}
+                </Box>
               </Grid>
               <Grid size={{ xs: 12, sm: 4 }}>
                 <Typography variant="caption" color="text.secondary">Net Amount</Typography>
@@ -419,10 +536,11 @@ const OrdersPage: React.FC = () => {
               <FormControl fullWidth size="small">
                 <InputLabel>Payment Mode</InputLabel>
                 <Select value={newPaymentMode} label="Payment Mode" onChange={(e) => setNewPaymentMode(e.target.value)}>
-                  <MenuItem value="Cash">💵 Cash</MenuItem>
-                  <MenuItem value="UPI">📱 UPI</MenuItem>
-                  <MenuItem value="Online">🌐 Online</MenuItem>
-                  <MenuItem value="Card">💳 Card</MenuItem>
+                  <MenuItem value="Cash">💵 Paid in Cash</MenuItem>
+                  <MenuItem value="GPay">📱 Paid in GPay (Google Pay)</MenuItem>
+                  <MenuItem value="UPI">📱 Paid in UPI / QR Code</MenuItem>
+                  <MenuItem value="Online">🌐 Paid Online / NetBanking</MenuItem>
+                  <MenuItem value="Card">💳 Paid by Card</MenuItem>
                 </Select>
               </FormControl>
             )}

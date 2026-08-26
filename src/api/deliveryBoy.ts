@@ -77,7 +77,8 @@ export const updateMyDeliveryStatus = (
   deliveryStatus: string,
   deliveryRemarks?: string,
   deliveryOtp?: string,
-) => api.put(`/deliveries/${id}/status`, { deliveryStatus, deliveryRemarks, deliveryOtp }).then((r) => r.data);
+  paymentMode?: string,
+) => api.put(`/deliveries/${id}/status`, { deliveryStatus, deliveryRemarks, deliveryOtp, paymentMode }).then((r) => r.data);
 
 export const requestDeliveryOtp = (id: number) =>
   api.post(`/deliveries/${id}/request-otp`).then((r) => r.data);
