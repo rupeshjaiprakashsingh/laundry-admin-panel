@@ -30,8 +30,20 @@ const PickupsPage: React.FC = () => {
   const [selectedEmployee, setSelectedEmployee] = useState<number | ''>('');
   const [newStatus, setNewStatus] = useState('');
 
-  const { data: pickups = [], isLoading, error } = useQuery({ queryKey: ['pickups'], queryFn: getPickups });
-  const { data: employees = [] } = useQuery({ queryKey: ['employees'], queryFn: getEmployees });
+  const { data: pickups = [], isLoading, error } = useQuery({
+    queryKey: ['pickups'],
+    queryFn: getPickups,
+    refetchInterval: 5_000,
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: 'always',
+  });
+  const { data: employees = [] } = useQuery({
+    queryKey: ['employees'],
+    queryFn: getEmployees,
+    refetchInterval: 5_000,
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: 'always',
+  });
 
   const deliveryBoys = (employees as Employee[]).filter((e) => ['Employee', 'DeliveryBoy'].includes(e.role));
 

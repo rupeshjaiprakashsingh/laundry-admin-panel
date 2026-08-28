@@ -620,7 +620,7 @@ const DeliveryCard: React.FC<{
                 />
                 <Typography sx={{ fontSize: 11, color: '#6B7280', fontWeight: 600 }}>
                   Payment: {delivery.order.paymentStatus}
-                  {delivery.order.netAmount ? ` — ₹${delivery.order.netAmount.toFixed(0)}` : ''}
+                  {delivery.order.netAmount ? ` — ₹${delivery.order.netAmount.toFixed(2)}` : ''}
                 </Typography>
               </Box>
             )}

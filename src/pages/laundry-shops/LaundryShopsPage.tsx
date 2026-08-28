@@ -48,17 +48,21 @@ const LaundryShopsPage: React.FC = () => {
   const { data: shops = [], isLoading, error } = useQuery({
     queryKey: ['laundry-shops'],
     queryFn: getLaundryShops,
+    refetchInterval: 5_000,
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: 'always',
   });
 
   const { data: detailShop, isLoading: detailLoading } = useQuery({
     queryKey: ['laundry-shop', detailShopId],
     queryFn: () => getLaundryShop(detailShopId!),
     enabled: detailShopId !== null,
+    refetchInterval: 5_000,
   });
 
   const createMutation = useMutation({
     mutationFn: (data: Partial<LaundryShop>) => createLaundryShop(data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['laundry-shops'] }); setFormOpen(false); setFormData(emptyForm); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['laundry-shops'] }); setFormOpen(false); setFormData(emptyForm); setEditShop(null); },
   });
 
   const updateMutation = useMutation({
@@ -85,6 +89,7 @@ const LaundryShopsPage: React.FC = () => {
 
   const handleOpenCreate = () => { setEditShop(null); setFormData(emptyForm); setFormOpen(true); };
   const handleOpenEdit = (shop: LaundryShop) => { setEditShop(shop); setFormData({ ...shop }); setFormOpen(true); };
+  const handleCloseForm = () => { setFormOpen(false); setEditShop(null); setFormData(emptyForm); };
   const handleSubmit = () => {
     if (editShop) updateMutation.mutate({ id: editShop.id, data: formData });
     else createMutation.mutate(formData);
@@ -235,7 +240,7 @@ const LaundryShopsPage: React.FC = () => {
       </Card>
 
       {/* ---- Create / Edit Dialog ---- */}
-      <Dialog open={formOpen} onClose={() => setFormOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog open={formOpen} onClose={handleCloseForm} maxWidth="sm" fullWidth>
         <DialogTitle sx={{ fontWeight: 700 }}>
           {editShop ? `Edit — ${editShop.shopName}` : '➕ Add New Laundry Shop'}
         </DialogTitle>
@@ -290,7 +295,7 @@ const LaundryShopsPage: React.FC = () => {
           </Grid>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setFormOpen(false)}>Cancel</Button>
+          <Button onClick={handleCloseForm}>Cancel</Button>
           <Button
             variant="contained"
             disabled={!formData.shopName || !formData.shopCode || createMutation.isPending || updateMutation.isPending}

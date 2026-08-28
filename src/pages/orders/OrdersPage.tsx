@@ -59,9 +59,27 @@ const OrdersPage: React.FC = () => {
   const [selectedDeliveryBoyId, setSelectedDeliveryBoyId] = useState<number | null>(null);
   const [bulkDeliveryResult, setBulkDeliveryResult] = useState<{ success: number; failed: number } | null>(null);
 
-  const { data: orders = [], isLoading, error } = useQuery({ queryKey: ['orders'], queryFn: getOrders });
-  const { data: laundryShops = [] } = useQuery({ queryKey: ['laundry-shops'], queryFn: getLaundryShops });
-  const { data: employees = [] } = useQuery({ queryKey: ['employees'], queryFn: getEmployees });
+  const { data: orders = [], isLoading, error } = useQuery({
+    queryKey: ['orders'],
+    queryFn: getOrders,
+    refetchInterval: 5_000,
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: 'always',
+  });
+  const { data: laundryShops = [] } = useQuery({
+    queryKey: ['laundry-shops'],
+    queryFn: getLaundryShops,
+    refetchInterval: 5_000,
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: 'always',
+  });
+  const { data: employees = [] } = useQuery({
+    queryKey: ['employees'],
+    queryFn: getEmployees,
+    refetchInterval: 5_000,
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: 'always',
+  });
   const deliveryBoys = (employees as Employee[]).filter(e => ['DeliveryBoy', 'Employee'].includes(e.role) && e.isActive);
 
   const statusMutation = useMutation({

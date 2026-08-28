@@ -29,10 +29,16 @@ const DashboardPage: React.FC = () => {
   const { data, isLoading, error } = useQuery({
     queryKey: ['dashboard'],
     queryFn: getDashboardStats,
+    refetchInterval: 5_000,
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: 'always',
   });
   const { data: laundryShops = [] } = useQuery({
     queryKey: ['laundry-shops'],
     queryFn: getLaundryShops,
+    refetchInterval: 5_000,
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: 'always',
   });
 
   const chartDefaults = {

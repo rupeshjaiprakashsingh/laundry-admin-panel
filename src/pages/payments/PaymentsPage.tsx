@@ -38,6 +38,9 @@ const PaymentsPage: React.FC = () => {
   const { data: orders = [], isLoading, error } = useQuery({
     queryKey: ['orders'],
     queryFn: getOrders,
+    refetchInterval: 5_000,
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: 'always',
   });
 
   const paymentMutation = useMutation({

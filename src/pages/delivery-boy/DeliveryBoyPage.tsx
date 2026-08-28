@@ -291,7 +291,7 @@ const PickupCard: React.FC<{
                 <Typography sx={{ fontSize: 12, fontWeight: 800, color: pickup.order.paymentStatus === 'Paid' ? '#047857' : '#B45309' }}>
                   {pickup.order.paymentStatus === 'Paid'
                     ? 'Payment: Paid'
-                    : `Payment: ₹${pickup.order.netAmount ? pickup.order.netAmount.toFixed(0) : '0'}`}
+                    : `Payment: ₹${pickup.order.netAmount ? pickup.order.netAmount.toFixed(2) : '0.00'}`}
                 </Typography>
               </Box>
             )}
@@ -854,7 +854,7 @@ const DeliveryCard: React.FC<{
                 <Typography sx={{ fontSize: 12, fontWeight: 800, color: delivery.order.paymentStatus === 'Paid' ? '#047857' : '#B45309' }}>
                   {delivery.order.paymentStatus === 'Paid'
                     ? 'Payment: Paid'
-                    : `Payment: ₹${delivery.order.netAmount ? delivery.order.netAmount.toFixed(0) : '0'}`}
+                    : `Payment: ₹${delivery.order.netAmount ? delivery.order.netAmount.toFixed(2) : '0.00'}`}
                 </Typography>
               </Box>
             )}
@@ -1023,7 +1023,7 @@ const DeliveryCard: React.FC<{
                     💵 Payment Collection Required
                   </Typography>
                   <Typography sx={{ fontSize: 12, color: '#92400E', fontWeight: 600, mb: 1.5 }}>
-                    Please collect <strong>₹{delivery.order?.netAmount ? delivery.order.netAmount.toFixed(0) : '0'}</strong> from {customer?.firstName} {customer?.lastName}.
+                    Please collect <strong>₹{delivery.order?.netAmount ? delivery.order.netAmount.toFixed(2) : '0.00'}</strong> from {customer?.firstName} {customer?.lastName}.
                   </Typography>
 
                   <Typography variant="caption" sx={{ fontWeight: 700, color: '#78350F', display: 'block', mb: 0.5 }}>

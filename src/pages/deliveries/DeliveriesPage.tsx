@@ -141,8 +141,20 @@ const DeliveriesPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState(0);
   const [selectedBoyProfile, setSelectedBoyProfile] = useState<number | null>(null);
 
-  const { data: orders = [], isLoading, error } = useQuery({ queryKey: ['orders'], queryFn: getOrders });
-  const { data: employees = [] } = useQuery({ queryKey: ['employees'], queryFn: getEmployees });
+  const { data: orders = [], isLoading, error } = useQuery({
+    queryKey: ['orders'],
+    queryFn: getOrders,
+    refetchInterval: 5_000,
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: 'always',
+  });
+  const { data: employees = [] } = useQuery({
+    queryKey: ['employees'],
+    queryFn: getEmployees,
+    refetchInterval: 5_000,
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: 'always',
+  });
 
   const deliveryBoys = useMemo(
     () => (employees as Employee[]).filter((e) => ['Employee', 'DeliveryBoy'].includes(e.role) && e.isActive),
