@@ -454,7 +454,18 @@ const PickupCard: React.FC<{
       </Card>
 
       {/* Confirm Dialog */}
-      <Dialog open={!!confirmDialog} onClose={() => setConfirmDialog(null)} maxWidth="xs" fullWidth>
+      <Dialog
+        open={!!confirmDialog}
+        onClose={() => {
+          setConfirmDialog(null);
+          setShowAddShop(false);
+          setNewShopName('');
+          setNewShopPincode('');
+          setSelectedShopId('');
+        }}
+        maxWidth="xs"
+        fullWidth
+      >
         <DialogTitle sx={{ fontWeight: 800, pb: 0.5 }}>
           {confirmDialog?.label}
         </DialogTitle>
@@ -663,11 +674,31 @@ const PickupCard: React.FC<{
           )}
         </DialogContent>
         <DialogActions sx={{ px: 2, pb: 2 }}>
-          <Button onClick={() => setConfirmDialog(null)} sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600 }}>No, Go Back</Button>
+          <Button
+            onClick={() => {
+              setConfirmDialog(null);
+              setShowAddShop(false);
+              setNewShopName('');
+              setNewShopPincode('');
+              setSelectedShopId('');
+            }}
+            sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600 }}
+          >
+            No, Go Back
+          </Button>
           <Button
             variant="contained"
             disabled={isLoading || (confirmDialog?.status === 'Completed' && !selectedShopId)}
-            onClick={() => { if (confirmDialog) { onAction(pickup.id, confirmDialog.status, selectedShopId ? Number(selectedShopId) : undefined); setConfirmDialog(null); } }}
+            onClick={() => {
+              if (confirmDialog) {
+                onAction(pickup.id, confirmDialog.status, selectedShopId ? Number(selectedShopId) : undefined);
+                setConfirmDialog(null);
+                setShowAddShop(false);
+                setNewShopName('');
+                setNewShopPincode('');
+                setSelectedShopId('');
+              }
+            }}
             sx={{
               borderRadius: 2, textTransform: 'none', fontWeight: 700,
               bgcolor: confirmDialog?.status === 'Completed' ? '#10B981' : '#EF4444',

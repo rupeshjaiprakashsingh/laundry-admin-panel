@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
   Box, Card, CardContent, Typography, TextField, Button, Grid,
   Divider, Alert, Chip, Stack, CircularProgress, Snackbar,
-  Dialog, DialogTitle, DialogContent, DialogActions,
+  Dialog, DialogTitle, DialogContent, DialogActions, Tabs, Tab,
 } from '@mui/material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -44,8 +44,30 @@ const SettingsPage: React.FC = () => {
   const [slotCapacity, setSlotCapacity] = useState(20);
   const [slotActive, setSlotActive] = useState(true);
 
+  const [slotTab, setSlotTab] = useState(0);
+
   const { data: branches = [] } = useQuery({ queryKey: ['branches'], queryFn: getBranches });
   const { data: timeSlots = [] } = useQuery({ queryKey: ['timeSlots'], queryFn: getTimeSlotsAdmin });
+
+  const isSlotBefore11Am = (name: string) => {
+    const lower = (name || '').toLowerCase();
+    return (
+      lower.includes('6 am') ||
+      lower.includes('7 am') ||
+      lower.includes('8 am') ||
+      lower.includes('9 am') ||
+      lower.includes('10 am') ||
+      lower.includes('before 11')
+    ) && !lower.includes('11 am -') && !lower.includes('12 pm') && !lower.includes('pm');
+  };
+
+  const prioritySlots = React.useMemo(() => {
+    return (timeSlots as any[]).filter((ts) => isSlotBefore11Am(ts.slotName));
+  }, [timeSlots]);
+
+  const normalSlots = React.useMemo(() => {
+    return (timeSlots as any[]).filter((ts) => !isSlotBefore11Am(ts.slotName));
+  }, [timeSlots]);
 
   const updateProfileMutation = useMutation({
     mutationFn: (data: Partial<{ fullName: string; mobileNumber: string }>) => updateEmployee(user!.userId, data),
@@ -225,34 +247,52 @@ const SettingsPage: React.FC = () => {
           </Grid>
         )}
 
-        {/* Time Slots (SuperAdmin only) */}
+        {/* Time Slots & Grivana Priority (SuperAdmin only) */}
         {user?.role === 'SuperAdmin' && (
           <Grid size={{ xs: 12 }}>
             <Card>
               <CardContent sx={{ p: 3 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5, flexWrap: 'wrap', gap: 1 }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                     <BusinessIcon color="primary" />
-                    <Typography sx={{ fontWeight: 700 }}>Time Slot Capacity Management</Typography>
+                    <Typography sx={{ fontWeight: 700 }}>Time Slot & Capacity Management</Typography>
                   </Box>
                   <Button variant="contained" size="small" startIcon={<AddIcon />}
-                    onClick={() => { setEditSlot(null); setSlotName(''); setSlotCapacity(20); setSlotActive(true); setSlotFormOpen(true); }}>
-                    Add Time Slot
+                    onClick={() => { setEditSlot(null); setSlotName(''); setSlotCapacity(slotTab === 1 ? 25 : 20); setSlotActive(true); setSlotFormOpen(true); }}>
+                    {slotTab === 1 ? 'Add Priority Slot' : 'Add Time Slot'}
                   </Button>
                 </Box>
-                <Divider sx={{ mb: 2 }} />
+
+                {/* Tabs for Normal vs Grivana Priority */}
+                <Tabs value={slotTab} onChange={(_, val) => setSlotTab(val)} sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}>
+                  <Tab label={`Normal Services (${normalSlots.length})`} sx={{ fontWeight: 700, textTransform: 'none' }} />
+                  <Tab label={`⚡ Grivana Priority (${prioritySlots.length})`} sx={{ fontWeight: 700, textTransform: 'none', color: slotTab === 1 ? '#EA580C' : undefined }} />
+                </Tabs>
+
+                {slotTab === 1 && (
+                  <Alert severity="warning" sx={{ mb: 2.5, borderRadius: 2 }}>
+                    <strong>⚡ Grivana Priority Express Rules:</strong> Grivana Priority orders are restricted to morning slots <strong>Before 11 AM</strong> with a strict capping limit of <strong>25 orders daily</strong> to guarantee express same-day turnaround.
+                  </Alert>
+                )}
+
                 <Grid container spacing={2}>
-                  {timeSlots.map((ts: any) => (
+                  {(slotTab === 1 ? prioritySlots : normalSlots).map((ts: any) => (
                     <Grid size={{ xs: 12, sm: 6, md: 4 }} key={ts.id}>
-                      <Box sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2, bgcolor: ts.isActive ? 'inherit' : '#F5F5F5' }}>
+                      <Box sx={{
+                        p: 2, border: '1.5px solid',
+                        borderColor: slotTab === 1 ? '#FED7AA' : 'divider',
+                        borderRadius: 2,
+                        bgcolor: slotTab === 1 ? '#FFFBEB' : (ts.isActive ? 'inherit' : '#F5F5F5'),
+                      }}>
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                           <Box>
                             <Typography sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
                               {ts.slotName}
+                              {slotTab === 1 && <Chip label="⚡ Priority (Before 11 AM)" size="small" sx={{ height: 18, fontSize: 10, bgcolor: '#FFEDD5', color: '#C2410C', fontWeight: 800 }} />}
                               {!ts.isActive && <Chip label="Inactive" size="small" color="default" sx={{ height: 16, fontSize: 10 }} />}
                             </Typography>
                             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                              Max Capacity: <strong>{ts.maxCapacity}</strong> orders
+                              {slotTab === 1 ? 'Priority Order Capping:' : 'Max Capacity:'} <strong>{ts.maxCapacity}</strong> orders
                             </Typography>
                           </Box>
                           <Stack direction="row" spacing={0.5}>
@@ -269,9 +309,11 @@ const SettingsPage: React.FC = () => {
                       </Box>
                     </Grid>
                   ))}
-                  {timeSlots.length === 0 && (
+                  {(slotTab === 1 ? prioritySlots : normalSlots).length === 0 && (
                     <Grid size={{ xs: 12 }}>
-                      <Alert severity="info">No time slots configured.</Alert>
+                      <Alert severity="info">
+                        {slotTab === 1 ? 'No Grivana Priority slots configured before 11 AM.' : 'No standard time slots configured.'}
+                      </Alert>
                     </Grid>
                   )}
                 </Grid>
