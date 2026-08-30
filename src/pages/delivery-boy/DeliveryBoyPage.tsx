@@ -473,12 +473,20 @@ const PickupCard: React.FC<{
         }}
         maxWidth="xs"
         fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            bgcolor: '#FFFFFF !important',
+            color: '#0F172A !important',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.1)',
+          },
+        }}
       >
-        <DialogTitle sx={{ fontWeight: 800, pb: 0.5 }}>
+        <DialogTitle sx={{ fontWeight: 800, pb: 0.5, color: '#0F172A !important' }}>
           {confirmDialog?.label}
         </DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary">
+        <DialogContent sx={{ color: '#0F172A !important' }}>
+          <Typography variant="body2" sx={{ color: '#475569 !important', mb: 1 }}>
             {confirmDialog?.status === 'Completed'
               ? `Confirm that you have collected the clothes for Order #${pickup.order?.orderNumber || `ORD-${String(pickup.id).padStart(5, '0')}`} from ${pickup.customer.firstName} ${pickup.customer.lastName}?`
               : `Are you sure you want to cancel pickup #${pickup.id} (Order #${pickup.order?.orderNumber || `ORD-${String(pickup.id).padStart(5, '0')}`})?`}
@@ -486,7 +494,7 @@ const PickupCard: React.FC<{
 
           {confirmDialog?.status === 'Completed' && (
             <Box sx={{ mt: 2 }}>
-              <Typography variant="body2" sx={{ fontWeight: 700, mb: 1, color: '#374151' }}>
+              <Typography variant="body2" sx={{ fontWeight: 800, mb: 1, color: '#1E293B !important' }}>
                 Select Laundry Shop to drop clothes:
               </Typography>
               <Autocomplete
@@ -504,30 +512,52 @@ const PickupCard: React.FC<{
                   <TextField
                     {...params}
                     label="Search & Select Laundry Shop"
-                    slotProps={{
-                      inputLabel: {
-                        sx: {
-                          color: '#475569 !important',
-                          fontWeight: 700,
-                          '&.Mui-focused': { color: '#4F46E5 !important' },
-                        },
+                    InputProps={{
+                      ...params.InputProps,
+                      style: {
+                        color: '#0F172A',
+                        backgroundColor: '#F8FAFC',
+                        fontSize: 14,
+                        fontWeight: 600,
                       },
                     }}
-                    sx={{
-                      bgcolor: '#FFFFFF',
-                      borderRadius: 1,
-                      '& .MuiOutlinedInput-root': {
-                        bgcolor: '#FFFFFF !important',
-                        color: '#0F172A !important',
-                        fontWeight: 600,
+                    inputProps={{
+                      ...params.inputProps,
+                      style: {
+                        color: '#0F172A',
+                        WebkitTextFillColor: '#0F172A',
+                        backgroundColor: '#F8FAFC',
                         fontSize: 14,
-                        '& fieldset': { borderColor: '#CBD5E1', borderWidth: 1.5 },
-                        '&:hover fieldset': { borderColor: '#4F46E5' },
-                        '&.Mui-focused fieldset': { borderColor: '#4F46E5' },
+                        fontWeight: 600,
                       },
-                      '& input': {
+                    }}
+                    InputLabelProps={{
+                      style: { color: '#334155', fontWeight: 800 },
+                    }}
+                    sx={{
+                      bgcolor: '#F8FAFC !important',
+                      borderRadius: 1.5,
+                      '& .MuiInputBase-root': {
+                        bgcolor: '#F8FAFC !important',
+                        color: '#0F172A !important',
+                      },
+                      '& .MuiInputBase-input': {
                         color: '#0F172A !important',
                         WebkitTextFillColor: '#0F172A !important',
+                      },
+                      '& .MuiInputLabel-root': {
+                        color: '#334155 !important',
+                      },
+                      '& .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#94A3B8 !important',
+                        borderWidth: '1.5px !important',
+                      },
+                      '&:hover .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#4F46E5 !important',
+                      },
+                      '& .Mui-focused .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#4F46E5 !important',
+                        borderWidth: '2px !important',
                       },
                     }}
                   />
@@ -545,7 +575,7 @@ const PickupCard: React.FC<{
                     }
                     setShowAddShop(!showAddShop);
                   }}
-                  sx={{ textTransform: 'none', fontWeight: 700, fontSize: 12, color: '#4F46E5' }}
+                  sx={{ textTransform: 'none', fontWeight: 800, fontSize: 12, color: '#4F46E5 !important' }}
                 >
                   {showAddShop ? 'Cancel Add New Shop' : '+ Add New Laundry Shop'}
                 </Button>
@@ -557,7 +587,7 @@ const PickupCard: React.FC<{
                   sx={{
                     p: 2,
                     mt: 1.5,
-                    bgcolor: '#FFFFFF !important',
+                    bgcolor: '#F8FAFC !important',
                     borderRadius: 2,
                     border: '2px solid #6366F1',
                     boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.08)',
@@ -583,42 +613,58 @@ const PickupCard: React.FC<{
                     placeholder="e.g. Ashok Laundry"
                     value={newShopName}
                     onChange={(e) => setNewShopName(e.target.value)}
-                    slotProps={{
-                      input: {
-                        sx: {
-                          color: '#0F172A !important',
-                          bgcolor: '#FFFFFF !important',
-                          fontWeight: 600,
-                          fontSize: 14,
-                          '& input': {
-                            color: '#0F172A !important',
-                            WebkitTextFillColor: '#0F172A !important',
-                            bgcolor: '#FFFFFF !important',
-                          },
-                        },
+                    InputProps={{
+                      style: {
+                        color: '#0F172A',
+                        backgroundColor: '#FFFFFF',
+                        fontSize: 14,
+                        fontWeight: 600,
                       },
-                      inputLabel: {
-                        sx: {
-                          color: '#334155 !important',
-                          fontWeight: 700,
-                          fontSize: 13,
-                          '&.Mui-focused': { color: '#4F46E5 !important' },
-                        },
+                    }}
+                    inputProps={{
+                      style: {
+                        color: '#0F172A',
+                        WebkitTextFillColor: '#0F172A',
+                        backgroundColor: '#FFFFFF',
+                        fontSize: 14,
+                        fontWeight: 600,
+                      },
+                    }}
+                    InputLabelProps={{
+                      shrink: true,
+                      style: {
+                        color: '#1E293B',
+                        fontWeight: 800,
+                        fontSize: 13,
                       },
                     }}
                     sx={{
                       mb: 1.5,
                       bgcolor: '#FFFFFF !important',
                       borderRadius: 1.5,
-                      '& .MuiOutlinedInput-root': {
+                      '& .MuiInputBase-root': {
                         bgcolor: '#FFFFFF !important',
-                        '& fieldset': { borderColor: '#94A3B8', borderWidth: 1.5 },
-                        '&:hover fieldset': { borderColor: '#4F46E5' },
-                        '&.Mui-focused fieldset': { borderColor: '#4F46E5', borderWidth: 2 },
+                        color: '#0F172A !important',
                       },
                       '& .MuiInputBase-input': {
                         color: '#0F172A !important',
                         WebkitTextFillColor: '#0F172A !important',
+                        bgcolor: '#FFFFFF !important',
+                      },
+                      '& .MuiInputLabel-root': {
+                        color: '#1E293B !important',
+                        fontWeight: 800,
+                      },
+                      '& .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#94A3B8 !important',
+                        borderWidth: '1.5px !important',
+                      },
+                      '&:hover .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#4F46E5 !important',
+                      },
+                      '& .Mui-focused .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#4F46E5 !important',
+                        borderWidth: '2px !important',
                       },
                     }}
                   />
@@ -629,42 +675,58 @@ const PickupCard: React.FC<{
                     placeholder="e.g. 400078"
                     value={newShopPincode}
                     onChange={(e) => setNewShopPincode(e.target.value.replace(/\D/g, '').substring(0, 6))}
-                    slotProps={{
-                      input: {
-                        sx: {
-                          color: '#0F172A !important',
-                          bgcolor: '#FFFFFF !important',
-                          fontWeight: 600,
-                          fontSize: 14,
-                          '& input': {
-                            color: '#0F172A !important',
-                            WebkitTextFillColor: '#0F172A !important',
-                            bgcolor: '#FFFFFF !important',
-                          },
-                        },
+                    InputProps={{
+                      style: {
+                        color: '#0F172A',
+                        backgroundColor: '#FFFFFF',
+                        fontSize: 14,
+                        fontWeight: 600,
                       },
-                      inputLabel: {
-                        sx: {
-                          color: '#334155 !important',
-                          fontWeight: 700,
-                          fontSize: 13,
-                          '&.Mui-focused': { color: '#4F46E5 !important' },
-                        },
+                    }}
+                    inputProps={{
+                      style: {
+                        color: '#0F172A',
+                        WebkitTextFillColor: '#0F172A',
+                        backgroundColor: '#FFFFFF',
+                        fontSize: 14,
+                        fontWeight: 600,
+                      },
+                    }}
+                    InputLabelProps={{
+                      shrink: true,
+                      style: {
+                        color: '#1E293B',
+                        fontWeight: 800,
+                        fontSize: 13,
                       },
                     }}
                     sx={{
                       mb: 2,
                       bgcolor: '#FFFFFF !important',
                       borderRadius: 1.5,
-                      '& .MuiOutlinedInput-root': {
+                      '& .MuiInputBase-root': {
                         bgcolor: '#FFFFFF !important',
-                        '& fieldset': { borderColor: '#94A3B8', borderWidth: 1.5 },
-                        '&:hover fieldset': { borderColor: '#4F46E5' },
-                        '&.Mui-focused fieldset': { borderColor: '#4F46E5', borderWidth: 2 },
+                        color: '#0F172A !important',
                       },
                       '& .MuiInputBase-input': {
                         color: '#0F172A !important',
                         WebkitTextFillColor: '#0F172A !important',
+                        bgcolor: '#FFFFFF !important',
+                      },
+                      '& .MuiInputLabel-root': {
+                        color: '#1E293B !important',
+                        fontWeight: 800,
+                      },
+                      '& .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#94A3B8 !important',
+                        borderWidth: '1.5px !important',
+                      },
+                      '&:hover .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#4F46E5 !important',
+                      },
+                      '& .Mui-focused .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#4F46E5 !important',
+                        borderWidth: '2px !important',
                       },
                     }}
                   />
@@ -677,7 +739,7 @@ const PickupCard: React.FC<{
                     sx={{
                       textTransform: 'none',
                       fontWeight: 800,
-                      py: 1,
+                      py: 1.2,
                       fontSize: 13,
                       bgcolor: '#4F46E5 !important',
                       color: '#FFFFFF !important',
@@ -1066,12 +1128,25 @@ const DeliveryCard: React.FC<{
       </Card>
 
       {/* Confirm Dialog */}
-      <Dialog open={!!confirmDialog} onClose={() => { setConfirmDialog(null); setOtpSent(false); setSentOtpCode(''); setEnteredOtp(''); setOtpError(''); }} maxWidth="xs" fullWidth>
-        <DialogTitle sx={{ fontWeight: 800, pb: 0.5 }}>
+      <Dialog
+        open={!!confirmDialog}
+        onClose={() => { setConfirmDialog(null); setOtpSent(false); setSentOtpCode(''); setEnteredOtp(''); setOtpError(''); }}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            bgcolor: '#FFFFFF !important',
+            color: '#0F172A !important',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.1)',
+          },
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: 800, pb: 0.5, color: '#0F172A !important' }}>
           {confirmDialog?.label}
         </DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        <DialogContent sx={{ color: '#0F172A !important' }}>
+          <Typography variant="body2" sx={{ color: '#475569 !important', mb: 2 }}>
             {confirmDialog?.status === 'Delivered'
               ? `Confirm that you have delivered Order #${delivery.order?.orderNumber || `ORD-${String(delivery.orderId).padStart(5, '0')}`} (Delivery #${delivery.id}) to ${customer?.firstName} ${customer?.lastName}?`
               : `Mark this delivery as failed? Order #${delivery.order?.orderNumber || `ORD-${String(delivery.orderId).padStart(5, '0')}`} will return to "Laundry" status.`}
@@ -1182,7 +1257,7 @@ const DeliveryCard: React.FC<{
                     )}
                   </Box>
 
-                  <Typography variant="body2" sx={{ fontWeight: 700, mb: 1, color: '#1E293B' }}>
+                  <Typography variant="body2" sx={{ fontWeight: 800, mb: 1, color: '#1E293B !important' }}>
                     Enter 6-digit Delivery OTP:
                   </Typography>
                   <TextField
@@ -1191,35 +1266,50 @@ const DeliveryCard: React.FC<{
                     placeholder="Enter 6-digit OTP"
                     value={enteredOtp}
                     onChange={(e) => setEnteredOtp(e.target.value.replace(/\D/g, '').substring(0, 6))}
-                    slotProps={{
-                      input: {
-                        sx: {
-                          color: '#0F172A !important',
-                          bgcolor: '#FFFFFF !important',
-                          fontWeight: 900,
-                          fontSize: 22,
-                          '& input': {
-                            color: '#0F172A !important',
-                            WebkitTextFillColor: '#0F172A !important',
-                            textAlign: 'center',
-                            letterSpacing: '8px',
-                          },
-                        },
+                    InputProps={{
+                      style: {
+                        color: '#0F172A',
+                        backgroundColor: '#FFFFFF',
+                        fontWeight: 900,
+                        fontSize: 22,
+                        textAlign: 'center',
+                      },
+                    }}
+                    inputProps={{
+                      style: {
+                        color: '#0F172A',
+                        WebkitTextFillColor: '#0F172A',
+                        backgroundColor: '#FFFFFF',
+                        fontWeight: 900,
+                        fontSize: 22,
+                        textAlign: 'center',
+                        letterSpacing: '8px',
                       },
                     }}
                     sx={{
                       mb: 1.5,
                       bgcolor: '#FFFFFF !important',
                       borderRadius: 1.5,
-                      '& .MuiOutlinedInput-root': {
+                      '& .MuiInputBase-root': {
                         bgcolor: '#FFFFFF !important',
-                        '& fieldset': { borderColor: '#94A3B8', borderWidth: 1.5 },
-                        '&:hover fieldset': { borderColor: '#4F46E5' },
-                        '&.Mui-focused fieldset': { borderColor: '#4F46E5', borderWidth: 2 },
+                        color: '#0F172A !important',
                       },
                       '& .MuiInputBase-input': {
                         color: '#0F172A !important',
                         WebkitTextFillColor: '#0F172A !important',
+                        textAlign: 'center',
+                        letterSpacing: '8px',
+                      },
+                      '& .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#94A3B8 !important',
+                        borderWidth: '1.5px !important',
+                      },
+                      '&:hover .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#4F46E5 !important',
+                      },
+                      '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#4F46E5 !important',
+                        borderWidth: '2px !important',
                       },
                     }}
                   />
