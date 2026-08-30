@@ -453,7 +453,7 @@ const PickupCard: React.FC<{
         </CardContent>
       </Card>
 
-      {/* Confirm Dialog */}
+        {/* Confirm Dialog */}
       <Dialog
         open={!!confirmDialog}
         onClose={() => {
@@ -488,6 +488,9 @@ const PickupCard: React.FC<{
                 value={laundryShops.find(s => s.id === Number(selectedShopId)) || null}
                 onChange={(_, newValue) => {
                   setSelectedShopId(newValue ? newValue.id : '');
+                  if (newValue) {
+                    setShowAddShop(false);
+                  }
                 }}
                 renderInput={(params) => (
                   <TextField
@@ -528,7 +531,12 @@ const PickupCard: React.FC<{
                 <Button
                   size="small"
                   variant="text"
-                  onClick={() => setShowAddShop(!showAddShop)}
+                  onClick={() => {
+                    if (!showAddShop) {
+                      setSelectedShopId('');
+                    }
+                    setShowAddShop(!showAddShop);
+                  }}
                   sx={{ textTransform: 'none', fontWeight: 700, fontSize: 12, color: '#4F46E5' }}
                 >
                   {showAddShop ? 'Cancel Add New Shop' : '+ Add New Laundry Shop'}
@@ -571,28 +579,32 @@ const PickupCard: React.FC<{
                       input: {
                         sx: {
                           color: '#0F172A !important',
-                          bgcolor: '#F8FAFC !important',
+                          bgcolor: '#FFFFFF !important',
                           fontWeight: 600,
                           fontSize: 14,
                           '& input': {
                             color: '#0F172A !important',
                             WebkitTextFillColor: '#0F172A !important',
+                            bgcolor: '#FFFFFF !important',
                           },
                         },
                       },
                       inputLabel: {
                         sx: {
-                          color: '#475569 !important',
+                          color: '#334155 !important',
                           fontWeight: 700,
+                          fontSize: 13,
                           '&.Mui-focused': { color: '#4F46E5 !important' },
                         },
                       },
                     }}
                     sx={{
                       mb: 1.5,
+                      bgcolor: '#FFFFFF !important',
+                      borderRadius: 1.5,
                       '& .MuiOutlinedInput-root': {
-                        bgcolor: '#F8FAFC !important',
-                        '& fieldset': { borderColor: '#CBD5E1', borderWidth: 1.5 },
+                        bgcolor: '#FFFFFF !important',
+                        '& fieldset': { borderColor: '#94A3B8', borderWidth: 1.5 },
                         '&:hover fieldset': { borderColor: '#4F46E5' },
                         '&.Mui-focused fieldset': { borderColor: '#4F46E5', borderWidth: 2 },
                       },
@@ -608,33 +620,37 @@ const PickupCard: React.FC<{
                     label="Pincode"
                     placeholder="e.g. 400078"
                     value={newShopPincode}
-                    onChange={(e) => setNewShopPincode(e.target.value)}
+                    onChange={(e) => setNewShopPincode(e.target.value.replace(/\D/g, '').substring(0, 6))}
                     slotProps={{
                       input: {
                         sx: {
                           color: '#0F172A !important',
-                          bgcolor: '#F8FAFC !important',
+                          bgcolor: '#FFFFFF !important',
                           fontWeight: 600,
                           fontSize: 14,
                           '& input': {
                             color: '#0F172A !important',
                             WebkitTextFillColor: '#0F172A !important',
+                            bgcolor: '#FFFFFF !important',
                           },
                         },
                       },
                       inputLabel: {
                         sx: {
-                          color: '#475569 !important',
+                          color: '#334155 !important',
                           fontWeight: 700,
+                          fontSize: 13,
                           '&.Mui-focused': { color: '#4F46E5 !important' },
                         },
                       },
                     }}
                     sx={{
                       mb: 2,
+                      bgcolor: '#FFFFFF !important',
+                      borderRadius: 1.5,
                       '& .MuiOutlinedInput-root': {
-                        bgcolor: '#F8FAFC !important',
-                        '& fieldset': { borderColor: '#CBD5E1', borderWidth: 1.5 },
+                        bgcolor: '#FFFFFF !important',
+                        '& fieldset': { borderColor: '#94A3B8', borderWidth: 1.5 },
                         '&:hover fieldset': { borderColor: '#4F46E5' },
                         '&.Mui-focused fieldset': { borderColor: '#4F46E5', borderWidth: 2 },
                       },
@@ -724,6 +740,7 @@ const DeliveryCard: React.FC<{
   const [confirmDialog, setConfirmDialog] = useState<{ status: string; label: string } | null>(null);
   const [enteredOtp, setEnteredOtp] = useState('');
   const [otpSent, setOtpSent] = useState(false);
+  const [sentOtpCode, setSentOtpCode] = useState<string>('');
   const [requestingOtp, setRequestingOtp] = useState(false);
   const [otpError, setOtpError] = useState('');
   const [collectedPaymentMode, setCollectedPaymentMode] = useState<string>('Cash');
@@ -734,9 +751,8 @@ const DeliveryCard: React.FC<{
     try {
       const res = await requestDeliveryOtp(delivery.id);
       setOtpSent(true);
-      // For development/mock, let's display the OTP in a toast or notification!
       if (res.otp) {
-        alert(`[DEV MODE] Delivery Completion OTP sent to customer is: ${res.otp}`);
+        setSentOtpCode(res.otp);
       }
     } catch (err: any) {
       setOtpError(err.response?.data?.message || 'Failed to send OTP');
@@ -1030,7 +1046,7 @@ const DeliveryCard: React.FC<{
       </Card>
 
       {/* Confirm Dialog */}
-      <Dialog open={!!confirmDialog} onClose={() => { setConfirmDialog(null); setOtpSent(false); setEnteredOtp(''); setOtpError(''); }} maxWidth="xs" fullWidth>
+      <Dialog open={!!confirmDialog} onClose={() => { setConfirmDialog(null); setOtpSent(false); setSentOtpCode(''); setEnteredOtp(''); setOtpError(''); }} maxWidth="xs" fullWidth>
         <DialogTitle sx={{ fontWeight: 800, pb: 0.5 }}>
           {confirmDialog?.label}
         </DialogTitle>
@@ -1099,13 +1115,54 @@ const DeliveryCard: React.FC<{
                   fullWidth variant="contained"
                   disabled={requestingOtp}
                   onClick={handleRequestOtp}
-                  sx={{ textTransform: 'none', fontWeight: 700, borderRadius: 2 }}
+                  sx={{
+                    textTransform: 'none',
+                    fontWeight: 700,
+                    borderRadius: 2,
+                    py: 1.2,
+                    background: 'linear-gradient(135deg, #4F46E5, #4338CA)',
+                    boxShadow: '0 2px 8px rgba(79, 70, 229, 0.35)',
+                    '&:hover': { background: 'linear-gradient(135deg, #4338CA, #3730A3)' },
+                  }}
                 >
                   {requestingOtp ? <CircularProgress size={16} color="inherit" /> : '🔑 Send Verification OTP to Customer'}
                 </Button>
               ) : (
                 <Box>
-                  <Typography variant="body2" sx={{ fontWeight: 700, mb: 1, color: '#374151' }}>
+                  <Box
+                    sx={{
+                      p: 1.5, mb: 2, bgcolor: '#ECFDF5', borderRadius: 2,
+                      border: '1.5px solid #10B981',
+                    }}
+                  >
+                    <Typography sx={{ fontWeight: 800, fontSize: 13, color: '#047857', display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
+                      ✅ OTP Sent to Customer!
+                    </Typography>
+                    <Typography sx={{ fontSize: 12, color: '#065F46', lineHeight: 1.5 }}>
+                      Delivery verification OTP has been sent via SMS to <strong>{customer?.mobileNumber}</strong> and Email to <strong>{customer?.email}</strong>.
+                    </Typography>
+                    {sentOtpCode && (
+                      <Box sx={{ mt: 1.25, pt: 1, borderTop: '1px dashed #A7F3D0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <Typography sx={{ fontSize: 12, fontWeight: 700, color: '#065F46' }}>
+                          🔑 Verification Code:
+                        </Typography>
+                        <Chip
+                          label={sentOtpCode}
+                          size="small"
+                          sx={{
+                            bgcolor: '#047857',
+                            color: '#FFFFFF',
+                            fontWeight: 900,
+                            fontSize: 14,
+                            letterSpacing: 2,
+                            px: 1,
+                          }}
+                        />
+                      </Box>
+                    )}
+                  </Box>
+
+                  <Typography variant="body2" sx={{ fontWeight: 700, mb: 1, color: '#1E293B' }}>
                     Enter 6-digit Delivery OTP:
                   </Typography>
                   <TextField
@@ -1118,34 +1175,43 @@ const DeliveryCard: React.FC<{
                       input: {
                         sx: {
                           color: '#0F172A !important',
-                          bgcolor: '#F8FAFC !important',
-                          fontWeight: 800,
-                          fontSize: 18,
+                          bgcolor: '#FFFFFF !important',
+                          fontWeight: 900,
+                          fontSize: 22,
                           '& input': {
                             color: '#0F172A !important',
                             WebkitTextFillColor: '#0F172A !important',
                             textAlign: 'center',
-                            letterSpacing: '6px',
+                            letterSpacing: '8px',
                           },
                         },
                       },
                     }}
                     sx={{
                       mb: 1.5,
+                      bgcolor: '#FFFFFF !important',
+                      borderRadius: 1.5,
                       '& .MuiOutlinedInput-root': {
-                        bgcolor: '#F8FAFC !important',
-                        '& fieldset': { borderColor: '#CBD5E1', borderWidth: 1.5 },
+                        bgcolor: '#FFFFFF !important',
+                        '& fieldset': { borderColor: '#94A3B8', borderWidth: 1.5 },
                         '&:hover fieldset': { borderColor: '#4F46E5' },
-                        '&.Mui-focused fieldset': { borderColor: '#4F46E5' },
+                        '&.Mui-focused fieldset': { borderColor: '#4F46E5', borderWidth: 2 },
+                      },
+                      '& .MuiInputBase-input': {
+                        color: '#0F172A !important',
+                        WebkitTextFillColor: '#0F172A !important',
                       },
                     }}
                   />
-                  <Box sx={{ textAlign: 'right' }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Typography sx={{ fontSize: 11, color: '#64748B' }}>
+                      Customer provides OTP upon receiving clothes
+                    </Typography>
                     <Button
                       size="small" variant="text"
                       disabled={requestingOtp}
                       onClick={handleRequestOtp}
-                      sx={{ textTransform: 'none', fontWeight: 700, fontSize: 11 }}
+                      sx={{ textTransform: 'none', fontWeight: 700, fontSize: 11, color: '#4F46E5' }}
                     >
                       Resend OTP
                     </Button>
@@ -1160,7 +1226,7 @@ const DeliveryCard: React.FC<{
           )}
         </DialogContent>
         <DialogActions sx={{ px: 2, pb: 2 }}>
-          <Button onClick={() => { setConfirmDialog(null); setOtpSent(false); setEnteredOtp(''); setOtpError(''); }} sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600 }}>No, Go Back</Button>
+          <Button onClick={() => { setConfirmDialog(null); setOtpSent(false); setSentOtpCode(''); setEnteredOtp(''); setOtpError(''); }} sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600 }}>No, Go Back</Button>
           <Button
             variant="contained"
             disabled={isLoading || (confirmDialog?.status === 'Delivered' && (!otpSent || enteredOtp.length !== 6))}
@@ -1175,6 +1241,7 @@ const DeliveryCard: React.FC<{
                 );
                 setConfirmDialog(null);
                 setOtpSent(false);
+                setSentOtpCode('');
                 setEnteredOtp('');
               }
             }}
