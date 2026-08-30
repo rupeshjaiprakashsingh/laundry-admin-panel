@@ -193,31 +193,37 @@ const PickupCard: React.FC<{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             }}
           >
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
               <Box
                 sx={{
-                  width: 38, height: 38, borderRadius: 2,
-                  background: 'linear-gradient(135deg, #6366F1, #4F46E5)',
+                  width: 40, height: 40, borderRadius: 2,
+                  background: isDone
+                    ? 'linear-gradient(135deg, #9CA3AF, #6B7280)'
+                    : 'linear-gradient(135deg, #6366F1, #4F46E5)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  flexShrink: 0,
+                  boxShadow: isDone ? 'none' : '0 2px 6px rgba(99, 102, 241, 0.3)',
                 }}
               >
                 <LocalShippingIcon sx={{ color: '#fff', fontSize: 20 }} />
               </Box>
-              <Box>
-                <Typography sx={{ fontWeight: 900, fontSize: 14, color: '#1E1B4B' }}>
+              <Box sx={{ minWidth: 0 }}>
+                {/* 1. ORDER NUMBER (Displayed directly above Pickup #) */}
+                <Typography sx={{ fontWeight: 900, fontSize: 15, color: isDone ? '#374151' : '#1E1B4B', lineHeight: 1.2, mb: 0.25 }}>
                   Order #{pickup.order?.orderNumber || (pickup as any).orderNumber || `ORD-${String(pickup.id).padStart(5, '0')}`}
                 </Typography>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <Chip
-                    label={`Pickup #${pickup.id}`}
-                    size="small"
-                    sx={{ height: 18, fontSize: 10, fontWeight: 800, bgcolor: '#C7D2FE', color: '#312E81' }}
-                  />
-                  <Typography sx={{ fontSize: 11, color: '#6B7280' }}>•</Typography>
-                  <AccessTimeIcon sx={{ fontSize: 11, color: '#6B7280' }} />
-                  <Typography sx={{ fontSize: 11, color: '#6B7280' }}>
-                    {formatPickupDate(pickup.pickupDate, pickup.pickupTime)}
+                {/* 2. PICKUP # and TIME SLOT */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
+                  <Typography sx={{ fontSize: 12, color: isDone ? '#4B5563' : '#4F46E5', fontWeight: 800 }}>
+                    Pickup #{pickup.id}
                   </Typography>
+                  <Typography sx={{ fontSize: 11, color: '#9CA3AF' }}>•</Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.35 }}>
+                    <AccessTimeIcon sx={{ fontSize: 12, color: '#6B7280' }} />
+                    <Typography sx={{ fontSize: 11, color: '#4B5563', fontWeight: 600 }}>
+                      {formatPickupDate(pickup.pickupDate, pickup.pickupTime)}
+                    </Typography>
+                  </Box>
                 </Box>
               </Box>
             </Box>
@@ -861,30 +867,38 @@ const DeliveryCard: React.FC<{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             }}
           >
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
               <Box
                 sx={{
-                  width: 38, height: 38, borderRadius: 2,
-                  background: 'linear-gradient(135deg, #F59E0B, #D97706)',
+                  width: 40, height: 40, borderRadius: 2,
+                  background: isDone
+                    ? 'linear-gradient(135deg, #9CA3AF, #6B7280)'
+                    : 'linear-gradient(135deg, #F59E0B, #D97706)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  flexShrink: 0,
+                  boxShadow: isDone ? 'none' : '0 2px 6px rgba(245, 158, 11, 0.3)',
                 }}
               >
                 <LocalLaundryServiceIcon sx={{ color: '#fff', fontSize: 20 }} />
               </Box>
-              <Box>
-                <Typography sx={{ fontWeight: 900, fontSize: 14, color: '#78350F' }}>
+              <Box sx={{ minWidth: 0 }}>
+                {/* 1. ORDER NUMBER (Displayed directly above Delivery #) */}
+                <Typography sx={{ fontWeight: 900, fontSize: 15, color: isDone ? '#374151' : '#78350F', lineHeight: 1.2, mb: 0.25 }}>
                   Order #{delivery.order?.orderNumber || (delivery as any).orderNumber || `ORD-${String(delivery.orderId).padStart(5, '0')}`}
                 </Typography>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <Chip
-                    label={`Delivery #${delivery.id}`}
-                    size="small"
-                    sx={{ height: 18, fontSize: 10, fontWeight: 800, bgcolor: '#FDE68A', color: '#92400E' }}
-                  />
-                  <Typography sx={{ fontSize: 11, color: '#92400E' }}>•</Typography>
-                  <Typography sx={{ fontSize: 11, color: '#92400E', fontWeight: 600 }}>
-                    {delivery.order?.customer?.mobileNumber || ''}
+                {/* 2. DELIVERY # and CUSTOMER PHONE */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
+                  <Typography sx={{ fontSize: 12, color: isDone ? '#4B5563' : '#D97706', fontWeight: 800 }}>
+                    Delivery #{delivery.id}
                   </Typography>
+                  {delivery.order?.customer?.mobileNumber && (
+                    <>
+                      <Typography sx={{ fontSize: 11, color: '#9CA3AF' }}>•</Typography>
+                      <Typography sx={{ fontSize: 11, color: '#4B5563', fontWeight: 600 }}>
+                        {delivery.order.customer.mobileNumber}
+                      </Typography>
+                    </>
+                  )}
                 </Box>
               </Box>
             </Box>
