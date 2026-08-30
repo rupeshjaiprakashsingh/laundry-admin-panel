@@ -88,7 +88,14 @@ const OrdersPage: React.FC = () => {
   });
   const paymentMutation = useMutation({
     mutationFn: ({ id, status, mode }: { id: number; status: string; mode?: string }) => updatePaymentStatus(id, status, mode),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['orders'] }); setEditOrder(null); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['orders'] });
+      qc.invalidateQueries({ queryKey: ['pickups'] });
+      qc.invalidateQueries({ queryKey: ['deliveries'] });
+      qc.invalidateQueries({ queryKey: ['my-pickups'] });
+      qc.invalidateQueries({ queryKey: ['my-deliveries'] });
+      setEditOrder(null);
+    },
   });
   const bulkAssignMutation = useMutation({
     mutationFn: ({ orderIds, shopId }: { orderIds: number[]; shopId: number }) =>
@@ -96,6 +103,10 @@ const OrdersPage: React.FC = () => {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['orders'] });
       qc.invalidateQueries({ queryKey: ['laundry-shops'] });
+      qc.invalidateQueries({ queryKey: ['pickups'] });
+      qc.invalidateQueries({ queryKey: ['deliveries'] });
+      qc.invalidateQueries({ queryKey: ['my-pickups'] });
+      qc.invalidateQueries({ queryKey: ['my-deliveries'] });
       setBulkAssignOpen(false);
       setSelectedRowIds({ type: 'include', ids: new Set() });
       setSelectedShopId(null);
@@ -114,6 +125,10 @@ const OrdersPage: React.FC = () => {
     },
     onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ['orders'] });
+      qc.invalidateQueries({ queryKey: ['pickups'] });
+      qc.invalidateQueries({ queryKey: ['deliveries'] });
+      qc.invalidateQueries({ queryKey: ['my-pickups'] });
+      qc.invalidateQueries({ queryKey: ['my-deliveries'] });
       setBulkDeliveryOpen(false);
       setSelectedRowIds({ type: 'include', ids: new Set() });
       setSelectedDeliveryBoyId(null);

@@ -49,12 +49,27 @@ const PickupsPage: React.FC = () => {
 
   const assignMutation = useMutation({
     mutationFn: ({ id, empId }: { id: number; empId: number }) => assignPickup(id, empId),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['pickups'] }); setAssignDialog(null); setSelectedEmployee(''); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['pickups'] });
+      qc.invalidateQueries({ queryKey: ['orders'] });
+      qc.invalidateQueries({ queryKey: ['deliveries'] });
+      qc.invalidateQueries({ queryKey: ['my-pickups'] });
+      qc.invalidateQueries({ queryKey: ['my-deliveries'] });
+      setAssignDialog(null);
+      setSelectedEmployee('');
+    },
   });
 
   const statusMutation = useMutation({
     mutationFn: ({ id, status }: { id: number; status: string }) => updatePickupStatus(id, status),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['pickups'] }); setStatusDialog(null); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['pickups'] });
+      qc.invalidateQueries({ queryKey: ['orders'] });
+      qc.invalidateQueries({ queryKey: ['deliveries'] });
+      qc.invalidateQueries({ queryKey: ['my-pickups'] });
+      qc.invalidateQueries({ queryKey: ['my-deliveries'] });
+      setStatusDialog(null);
+    },
   });
 
   const filtered = useMemo(() =>

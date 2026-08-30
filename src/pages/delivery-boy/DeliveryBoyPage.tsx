@@ -196,21 +196,23 @@ const PickupCard: React.FC<{
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <Box
                 sx={{
-                  width: 36, height: 36, borderRadius: 2,
+                  width: 38, height: 38, borderRadius: 2,
                   background: 'linear-gradient(135deg, #6366F1, #4F46E5)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}
               >
-                <LocalShippingIcon sx={{ color: '#fff', fontSize: 18 }} />
+                <LocalShippingIcon sx={{ color: '#fff', fontSize: 20 }} />
               </Box>
               <Box>
-                <Typography sx={{ fontWeight: 800, fontSize: 13, color: '#1E1B4B' }}>
-                  {pickup.order?.orderNumber ? `Order #${pickup.order.orderNumber}` : `Pickup #${pickup.id}`}
+                <Typography sx={{ fontWeight: 900, fontSize: 14, color: '#1E1B4B' }}>
+                  Order #{pickup.order?.orderNumber || (pickup as any).orderNumber || `ORD-${String(pickup.id).padStart(5, '0')}`}
                 </Typography>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <Typography sx={{ fontSize: 11, color: '#4F46E5', fontWeight: 700 }}>
-                    Pickup #{pickup.id}
-                  </Typography>
+                  <Chip
+                    label={`Pickup #${pickup.id}`}
+                    size="small"
+                    sx={{ height: 18, fontSize: 10, fontWeight: 800, bgcolor: '#C7D2FE', color: '#312E81' }}
+                  />
                   <Typography sx={{ fontSize: 11, color: '#6B7280' }}>•</Typography>
                   <AccessTimeIcon sx={{ fontSize: 11, color: '#6B7280' }} />
                   <Typography sx={{ fontSize: 11, color: '#6B7280' }}>
@@ -239,20 +241,26 @@ const PickupCard: React.FC<{
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 px: 1.5,
-                py: 0.75,
-                mb: 1.25,
+                py: 1,
+                mb: 1.5,
                 bgcolor: '#EEF2FF',
                 borderRadius: 2,
-                border: '1px solid #C7D2FE',
+                border: '1.5px solid #6366F1',
+                boxShadow: '0 1px 3px rgba(99, 102, 241, 0.1)',
               }}
             >
-              <Typography sx={{ fontSize: 12, fontWeight: 800, color: '#312E81', display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                📦 Order No: <span style={{ color: '#4F46E5', fontWeight: 900 }}>{pickup.order?.orderNumber || `ORD-${String(pickup.id).padStart(5, '0')}`}</span>
-              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                <Typography sx={{ fontSize: 12, fontWeight: 800, color: '#312E81' }}>
+                  📦 Order No:
+                </Typography>
+                <Typography sx={{ fontSize: 14, fontWeight: 900, color: '#4F46E5', letterSpacing: '0.5px' }}>
+                  {pickup.order?.orderNumber || (pickup as any).orderNumber || `ORD-${String(pickup.id).padStart(5, '0')}`}
+                </Typography>
+              </Box>
               <Chip
-                label={`Pickup #${pickup.id}`}
+                label={pickup.order?.orderNumber ? 'Linked Order' : `Pickup #${pickup.id}`}
                 size="small"
-                sx={{ height: 20, fontSize: 10, fontWeight: 700, bgcolor: '#E0E7FF', color: '#4338CA' }}
+                sx={{ height: 20, fontSize: 10, fontWeight: 800, bgcolor: '#E0E7FF', color: '#4338CA' }}
               />
             </Box>
 
@@ -794,20 +802,26 @@ const DeliveryCard: React.FC<{
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <Box
                 sx={{
-                  width: 36, height: 36, borderRadius: 2,
+                  width: 38, height: 38, borderRadius: 2,
                   background: 'linear-gradient(135deg, #F59E0B, #D97706)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}
               >
-                <LocalLaundryServiceIcon sx={{ color: '#fff', fontSize: 18 }} />
+                <LocalLaundryServiceIcon sx={{ color: '#fff', fontSize: 20 }} />
               </Box>
               <Box>
-                <Typography sx={{ fontWeight: 800, fontSize: 13, color: '#78350F' }}>
-                  {delivery.order?.orderNumber ? `Order #${delivery.order.orderNumber}` : `Delivery #${delivery.id}`}
+                <Typography sx={{ fontWeight: 900, fontSize: 14, color: '#78350F' }}>
+                  Order #{delivery.order?.orderNumber || (delivery as any).orderNumber || `ORD-${String(delivery.orderId).padStart(5, '0')}`}
                 </Typography>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <Typography sx={{ fontSize: 11, color: '#B45309', fontWeight: 700 }}>
-                    Delivery #{delivery.id}
+                  <Chip
+                    label={`Delivery #${delivery.id}`}
+                    size="small"
+                    sx={{ height: 18, fontSize: 10, fontWeight: 800, bgcolor: '#FDE68A', color: '#92400E' }}
+                  />
+                  <Typography sx={{ fontSize: 11, color: '#92400E' }}>•</Typography>
+                  <Typography sx={{ fontSize: 11, color: '#92400E', fontWeight: 600 }}>
+                    {delivery.order?.customer?.mobileNumber || ''}
                   </Typography>
                 </Box>
               </Box>
@@ -831,20 +845,26 @@ const DeliveryCard: React.FC<{
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 px: 1.5,
-                py: 0.75,
-                mb: 1.25,
+                py: 1,
+                mb: 1.5,
                 bgcolor: '#FEF3C7',
                 borderRadius: 2,
-                border: '1px solid #FDE68A',
+                border: '1.5px solid #F59E0B',
+                boxShadow: '0 1px 3px rgba(245, 158, 11, 0.1)',
               }}
             >
-              <Typography sx={{ fontSize: 12, fontWeight: 800, color: '#78350F', display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                📦 Order No: <span style={{ color: '#D97706', fontWeight: 900 }}>{delivery.order?.orderNumber || `ORD-${String(delivery.orderId).padStart(5, '0')}`}</span>
-              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                <Typography sx={{ fontSize: 12, fontWeight: 800, color: '#78350F' }}>
+                  📦 Order No:
+                </Typography>
+                <Typography sx={{ fontSize: 14, fontWeight: 900, color: '#D97706', letterSpacing: '0.5px' }}>
+                  {delivery.order?.orderNumber || (delivery as any).orderNumber || `ORD-${String(delivery.orderId).padStart(5, '0')}`}
+                </Typography>
+              </Box>
               <Chip
-                label={`Delivery #${delivery.id}`}
+                label={delivery.order?.orderNumber ? 'Linked Order' : `Delivery #${delivery.id}`}
                 size="small"
-                sx={{ height: 20, fontSize: 10, fontWeight: 700, bgcolor: '#FDE68A', color: '#92400E' }}
+                sx={{ height: 20, fontSize: 10, fontWeight: 800, bgcolor: '#FDE68A', color: '#92400E' }}
               />
             </Box>
 
@@ -1305,7 +1325,7 @@ const DeliveryBoyPage: React.FC = () => {
   } = useQuery({
     queryKey: ['my-pickups'],
     queryFn: getMyPickupAssignments,
-    refetchInterval: 5_000,               // Auto-poll every 5 seconds for instant real-time live sync
+    refetchInterval: 3_000,               // Auto-poll every 3 seconds for instant real-time live sync
     refetchIntervalInBackground: true,    // Keep polling in background so updates arrive immediately
     refetchOnWindowFocus: 'always',       // Immediately refresh when switching back to tab
     staleTime: 0,                         // Always consider stale so refetch triggers immediate API call
@@ -1319,18 +1339,18 @@ const DeliveryBoyPage: React.FC = () => {
   } = useQuery({
     queryKey: ['my-deliveries'],
     queryFn: getMyDeliveries,
-    refetchInterval: 5_000,
+    refetchInterval: 3_000,
     refetchIntervalInBackground: true,
     refetchOnWindowFocus: 'always',
     staleTime: 0,
   });
 
-  // Active heartbeat timer every 5 seconds to ensure polling never sleeps
+  // Active heartbeat timer every 3 seconds to ensure polling never sleeps
   useEffect(() => {
     const liveTimer = setInterval(() => {
       refetchPickups();
       refetchDeliveries();
-    }, 5_000);
+    }, 3_000);
     return () => clearInterval(liveTimer);
   }, [refetchPickups, refetchDeliveries]);
 

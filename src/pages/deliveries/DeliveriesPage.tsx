@@ -164,13 +164,28 @@ const DeliveriesPage: React.FC = () => {
   const assignMutation = useMutation({
     mutationFn: ({ orderId, empId }: { orderId: number; empId: number }) =>
       api.post('/deliveries', { orderId, deliveryEmployeeId: empId }).then((r) => r.data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['orders'] }); setAssignDialog(null); setSelectedEmployee(''); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['orders'] });
+      qc.invalidateQueries({ queryKey: ['deliveries'] });
+      qc.invalidateQueries({ queryKey: ['pickups'] });
+      qc.invalidateQueries({ queryKey: ['my-deliveries'] });
+      qc.invalidateQueries({ queryKey: ['my-pickups'] });
+      setAssignDialog(null);
+      setSelectedEmployee('');
+    },
   });
 
   const statusMutation = useMutation({
     mutationFn: ({ id, status }: { id: number; status: string }) =>
       api.put(`/deliveries/${id}/status`, { deliveryStatus: status }).then((r) => r.data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['orders'] }); setStatusDialog(null); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['orders'] });
+      qc.invalidateQueries({ queryKey: ['deliveries'] });
+      qc.invalidateQueries({ queryKey: ['pickups'] });
+      qc.invalidateQueries({ queryKey: ['my-deliveries'] });
+      qc.invalidateQueries({ queryKey: ['my-pickups'] });
+      setStatusDialog(null);
+    },
   });
 
   // Flatten deliveries from orders, keeping only the latest delivery for each order to avoid duplicates in the UI
