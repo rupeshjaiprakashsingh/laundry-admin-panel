@@ -129,34 +129,68 @@ const PickupCard: React.FC<{
   laundryShops: any[];
   onAction: (id: number, status: string, laundryShopId?: number) => void;
   isLoading: boolean;
-}> = ({ pickup, laundryShops, onAction, isLoading }) => {
+}> = ({ pickup, laundryShops: rawLaundryShops, onAction, isLoading }) => {
   const [expanded, setExpanded] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<{ status: string; label: string } | null>(null);
-  const [selectedShopId, setSelectedShopId] = useState<number | string>('');
+
+  // Normalize laundryShops to guaranteed array
+  const laundryShops = useMemo(() => {
+    const list = Array.isArray(rawLaundryShops)
+      ? rawLaundryShops
+      : (rawLaundryShops as any)?.data || [];
+    return list.filter((s: any) => s && s.isActive !== false);
+  }, [rawLaundryShops]);
+
+  // Pre-select laundry shop if already assigned to this order
+  const assignedShopId = (pickup.order as any)?.laundryShopId || (pickup as any).laundryShopId || pickup.order?.laundryShop?.id || '';
+  const [selectedShopId, setSelectedShopId] = useState<number | string>(assignedShopId);
+  const [shopFilter, setShopFilter] = useState('');
   const [showAddShop, setShowAddShop] = useState(false);
   const [newShopName, setNewShopName] = useState('');
   const [newShopPincode, setNewShopPincode] = useState('');
   const [creatingShop, setCreatingShop] = useState(false);
   const qc = useQueryClient();
 
+  useEffect(() => {
+    if (assignedShopId && !selectedShopId) {
+      setSelectedShopId(assignedShopId);
+    }
+  }, [assignedShopId]);
+
   const handleCreateShop = async () => {
     if (!newShopName.trim() || !newShopPincode.trim()) return;
     setCreatingShop(true);
     try {
       const randomCode = 'SHOP-' + Math.floor(1000 + Math.random() * 9000);
-      const newShop = await createLaundryShop({
-        shopName: newShopName,
+      const res = await createLaundryShop({
+        shopName: newShopName.trim(),
         shopCode: randomCode,
-        pincode: newShopPincode,
+        pincode: newShopPincode.trim(),
         isActive: true,
       });
-      qc.invalidateQueries({ queryKey: ['laundry-shops'] });
-      setSelectedShopId(newShop.id);
+
+      const newShop = (res as any)?.data || res;
+      const createdId = newShop?.id;
+
+      // Immediately inject into React Query cache so it shows instantly in the dropdown
+      qc.setQueryData(['laundry-shops'], (old: any) => {
+        const currentList = Array.isArray(old) ? old : (old?.data || []);
+        if (newShop && createdId) {
+          return [newShop, ...currentList.filter((s: any) => s.id !== createdId)];
+        }
+        return currentList;
+      });
+      await qc.invalidateQueries({ queryKey: ['laundry-shops'] });
+
+      if (createdId) {
+        setSelectedShopId(createdId);
+      }
       setShowAddShop(false);
       setNewShopName('');
       setNewShopPincode('');
     } catch (err) {
       console.error('Failed to create shop', err);
+      alert('Failed to create laundry shop. Please check details and try again.');
     } finally {
       setCreatingShop(false);
     }
@@ -425,7 +459,13 @@ const PickupCard: React.FC<{
                   fullWidth variant="contained" size="medium"
                   startIcon={isLoading ? <CircularProgress size={14} color="inherit" /> : <CheckCircleOutlineIcon />}
                   disabled={isLoading || pickup.status === 'Completed'}
-                  onClick={() => setConfirmDialog({ status: 'Completed', label: 'Mark as Picked Up' })}
+                  onClick={() => {
+                    const existingShopId = (pickup.order as any)?.laundryShopId || (pickup as any).laundryShopId || pickup.order?.laundryShop?.id || '';
+                    if (existingShopId) {
+                      setSelectedShopId(existingShopId);
+                    }
+                    setConfirmDialog({ status: 'Completed', label: 'Mark as Picked Up' });
+                  }}
                   sx={{
                     borderRadius: 2, fontWeight: 700, textTransform: 'none', fontSize: 13,
                     background: 'linear-gradient(135deg, #10B981, #059669)',
@@ -475,16 +515,18 @@ const PickupCard: React.FC<{
           setShowAddShop(false);
           setNewShopName('');
           setNewShopPincode('');
-          setSelectedShopId('');
+          setShopFilter('');
         }}
         maxWidth="xs"
         fullWidth
-        PaperProps={{
-          sx: {
-            borderRadius: 3,
-            bgcolor: '#FFFFFF !important',
-            color: '#0F172A !important',
-            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.1)',
+        slotProps={{
+          paper: {
+            sx: {
+              borderRadius: 3,
+              bgcolor: '#FFFFFF !important',
+              color: '#0F172A !important',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.1)',
+            },
           },
         }}
       >
@@ -503,73 +545,123 @@ const PickupCard: React.FC<{
               <Typography variant="body2" sx={{ fontWeight: 800, mb: 1, color: '#1E293B !important' }}>
                 Select Laundry Shop to drop clothes:
               </Typography>
-              <Autocomplete
-                size="small"
-                options={laundryShops}
-                getOptionLabel={(shop) => `${shop.shopName} (${shop.pincode})`}
-                value={laundryShops.find(s => s.id === Number(selectedShopId)) || null}
-                onChange={(_, newValue) => {
-                  setSelectedShopId(newValue ? newValue.id : '');
-                  if (newValue) {
-                    setShowAddShop(false);
-                  }
-                }}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label="Search & Select Laundry Shop"
-                    InputProps={{
-                      ...params.InputProps,
-                      style: {
-                        color: '#0F172A',
-                        backgroundColor: '#F8FAFC',
-                        fontSize: 14,
-                        fontWeight: 600,
+
+              {/* Filter search if there are multiple shops */}
+              {laundryShops.length > 4 && (
+                <TextField
+                  fullWidth
+                  size="small"
+                  placeholder="🔍 Search shop name or pincode..."
+                  value={shopFilter}
+                  onChange={(e) => setShopFilter(e.target.value)}
+                  slotProps={{
+                    input: {
+                      endAdornment: shopFilter ? (
+                        <IconButton size="small" onClick={() => setShopFilter('')}>
+                          <ClearIcon sx={{ fontSize: 16 }} />
+                        </IconButton>
+                      ) : null,
+                    },
+                  }}
+                  sx={{
+                    mb: 1.5,
+                    bgcolor: '#FFFFFF',
+                    borderRadius: 1.5,
+                    '& .MuiInputBase-input': { fontSize: 13, py: 0.9 },
+                  }}
+                />
+              )}
+
+              <FormControl fullWidth size="small" sx={{ mb: 1.5 }}>
+                <InputLabel id="select-laundry-shop-label" sx={{ color: '#334155', fontWeight: 800 }}>
+                  Select Laundry Shop
+                </InputLabel>
+                <Select
+                  labelId="select-laundry-shop-label"
+                  id="select-laundry-shop"
+                  value={selectedShopId || ''}
+                  label="Select Laundry Shop"
+                  onChange={(e) => {
+                    setSelectedShopId(e.target.value);
+                    if (e.target.value) {
+                      setShowAddShop(false);
+                    }
+                  }}
+                  displayEmpty
+                  MenuProps={{
+                    slotProps: {
+                      paper: {
+                        sx: {
+                          maxHeight: 280,
+                          borderRadius: 2,
+                          boxShadow: '0 10px 25px rgba(0,0,0,0.15)',
+                          '& .MuiMenuItem-root': {
+                            py: 1.2,
+                            fontSize: 13.5,
+                            fontWeight: 600,
+                            color: '#0F172A',
+                            '&:hover': { bgcolor: '#EEF2FF' },
+                            '&.Mui-selected': { bgcolor: '#E0E7FF !important', fontWeight: 800 },
+                          },
+                        },
                       },
-                    }}
-                    inputProps={{
-                      ...params.inputProps,
-                      style: {
-                        color: '#0F172A',
-                        WebkitTextFillColor: '#0F172A',
-                        backgroundColor: '#F8FAFC',
-                        fontSize: 14,
-                        fontWeight: 600,
-                      },
-                    }}
-                    InputLabelProps={{
-                      style: { color: '#334155', fontWeight: 800 },
-                    }}
-                    sx={{
-                      bgcolor: '#F8FAFC !important',
-                      borderRadius: 1.5,
-                      '& .MuiInputBase-root': {
-                        bgcolor: '#F8FAFC !important',
-                        color: '#0F172A !important',
-                      },
-                      '& .MuiInputBase-input': {
-                        color: '#0F172A !important',
-                        WebkitTextFillColor: '#0F172A !important',
-                      },
-                      '& .MuiInputLabel-root': {
-                        color: '#334155 !important',
-                      },
-                      '& .MuiOutlinedInput-notchedOutline': {
-                        borderColor: '#94A3B8 !important',
-                        borderWidth: '1.5px !important',
-                      },
-                      '&:hover .MuiOutlinedInput-notchedOutline': {
-                        borderColor: '#4F46E5 !important',
-                      },
-                      '& .Mui-focused .MuiOutlinedInput-notchedOutline': {
-                        borderColor: '#4F46E5 !important',
-                        borderWidth: '2px !important',
-                      },
-                    }}
-                  />
-                )}
-                sx={{ mb: 1.5 }}
-              />
+                    },
+                  }}
+                  sx={{
+                    bgcolor: '#F8FAFC',
+                    borderRadius: 1.5,
+                    fontWeight: 700,
+                    color: '#0F172A',
+                    '& .MuiOutlinedInput-notchedOutline': {
+                      borderColor: '#94A3B8',
+                      borderWidth: '1.5px',
+                    },
+                    '&:hover .MuiOutlinedInput-notchedOutline': {
+                      borderColor: '#4F46E5',
+                    },
+                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                      borderColor: '#4F46E5',
+                      borderWidth: '2px',
+                    },
+                  }}
+                >
+                  <MenuItem value="" disabled sx={{ color: '#94A3B8' }}>
+                    <em>-- Choose a Laundry Shop ({laundryShops.length} available) --</em>
+                  </MenuItem>
+                  {laundryShops
+                    .filter((shop: any) => {
+                      if (!shopFilter) return true;
+                      const q = shopFilter.toLowerCase();
+                      return (
+                        shop.shopName?.toLowerCase().includes(q) ||
+                        shop.pincode?.includes(q)
+                      );
+                    })
+                    .map((shop: any) => (
+                      <MenuItem key={shop.id} value={shop.id}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                          <Typography sx={{ fontSize: 13.5, fontWeight: 700, color: '#0F172A' }}>
+                            🏪 {shop.shopName}
+                          </Typography>
+                          {shop.pincode && (
+                            <Chip
+                              label={`PIN: ${shop.pincode}`}
+                              size="small"
+                              sx={{
+                                height: 20,
+                                fontSize: 10.5,
+                                fontWeight: 700,
+                                bgcolor: '#E0E7FF',
+                                color: '#3730A3',
+                                ml: 1,
+                              }}
+                            />
+                          )}
+                        </Box>
+                      </MenuItem>
+                    ))}
+                </Select>
+              </FormControl>
 
               <Box sx={{ textAlign: 'right' }}>
                 <Button
@@ -619,29 +711,31 @@ const PickupCard: React.FC<{
                     placeholder="e.g. Ashok Laundry"
                     value={newShopName}
                     onChange={(e) => setNewShopName(e.target.value)}
-                    InputProps={{
-                      style: {
-                        color: '#0F172A',
-                        backgroundColor: '#FFFFFF',
-                        fontSize: 14,
-                        fontWeight: 600,
+                    slotProps={{
+                      input: {
+                        style: {
+                          color: '#0F172A',
+                          backgroundColor: '#FFFFFF',
+                          fontSize: 14,
+                          fontWeight: 600,
+                        },
                       },
-                    }}
-                    inputProps={{
-                      style: {
-                        color: '#0F172A',
-                        WebkitTextFillColor: '#0F172A',
-                        backgroundColor: '#FFFFFF',
-                        fontSize: 14,
-                        fontWeight: 600,
+                      htmlInput: {
+                        style: {
+                          color: '#0F172A',
+                          WebkitTextFillColor: '#0F172A',
+                          backgroundColor: '#FFFFFF',
+                          fontSize: 14,
+                          fontWeight: 600,
+                        },
                       },
-                    }}
-                    InputLabelProps={{
-                      shrink: true,
-                      style: {
-                        color: '#1E293B',
-                        fontWeight: 800,
-                        fontSize: 13,
+                      inputLabel: {
+                        shrink: true,
+                        style: {
+                          color: '#1E293B',
+                          fontWeight: 800,
+                          fontSize: 13,
+                        },
                       },
                     }}
                     sx={{
@@ -681,29 +775,31 @@ const PickupCard: React.FC<{
                     placeholder="e.g. 400078"
                     value={newShopPincode}
                     onChange={(e) => setNewShopPincode(e.target.value.replace(/\D/g, '').substring(0, 6))}
-                    InputProps={{
-                      style: {
-                        color: '#0F172A',
-                        backgroundColor: '#FFFFFF',
-                        fontSize: 14,
-                        fontWeight: 600,
+                    slotProps={{
+                      input: {
+                        style: {
+                          color: '#0F172A',
+                          backgroundColor: '#FFFFFF',
+                          fontSize: 14,
+                          fontWeight: 600,
+                        },
                       },
-                    }}
-                    inputProps={{
-                      style: {
-                        color: '#0F172A',
-                        WebkitTextFillColor: '#0F172A',
-                        backgroundColor: '#FFFFFF',
-                        fontSize: 14,
-                        fontWeight: 600,
+                      htmlInput: {
+                        style: {
+                          color: '#0F172A',
+                          WebkitTextFillColor: '#0F172A',
+                          backgroundColor: '#FFFFFF',
+                          fontSize: 14,
+                          fontWeight: 600,
+                        },
                       },
-                    }}
-                    InputLabelProps={{
-                      shrink: true,
-                      style: {
-                        color: '#1E293B',
-                        fontWeight: 800,
-                        fontSize: 13,
+                      inputLabel: {
+                        shrink: true,
+                        style: {
+                          color: '#1E293B',
+                          fontWeight: 800,
+                          fontSize: 13,
+                        },
                       },
                     }}
                     sx={{
@@ -772,7 +868,7 @@ const PickupCard: React.FC<{
               setShowAddShop(false);
               setNewShopName('');
               setNewShopPincode('');
-              setSelectedShopId('');
+              setShopFilter('');
             }}
             sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600 }}
           >
@@ -788,7 +884,7 @@ const PickupCard: React.FC<{
                 setShowAddShop(false);
                 setNewShopName('');
                 setNewShopPincode('');
-                setSelectedShopId('');
+                setShopFilter('');
               }
             }}
             sx={{
@@ -1147,12 +1243,14 @@ const DeliveryCard: React.FC<{
         onClose={() => { setConfirmDialog(null); setOtpSent(false); setSentOtpCode(''); setEnteredOtp(''); setOtpError(''); }}
         maxWidth="xs"
         fullWidth
-        PaperProps={{
-          sx: {
-            borderRadius: 3,
-            bgcolor: '#FFFFFF !important',
-            color: '#0F172A !important',
-            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.1)',
+        slotProps={{
+          paper: {
+            sx: {
+              borderRadius: 3,
+              bgcolor: '#FFFFFF !important',
+              color: '#0F172A !important',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.1)',
+            },
           },
         }}
       >
@@ -1248,7 +1346,7 @@ const DeliveryCard: React.FC<{
                       ✅ OTP Sent to Customer!
                     </Typography>
                     <Typography sx={{ fontSize: 12, color: '#065F46', lineHeight: 1.5 }}>
-                      Delivery verification OTP has been sent via SMS to <strong>{customer?.mobileNumber}</strong> and Email to <strong>{customer?.email}</strong>.
+                      Delivery verification OTP has been sent via SMS to <strong>{customer?.mobileNumber}</strong> and Email to <strong>{(customer as any)?.email}</strong>.
                     </Typography>
                     {sentOtpCode && (
                       <Box sx={{ mt: 1.25, pt: 1, borderTop: '1px dashed #A7F3D0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -1280,24 +1378,26 @@ const DeliveryCard: React.FC<{
                     placeholder="Enter 6-digit OTP"
                     value={enteredOtp}
                     onChange={(e) => setEnteredOtp(e.target.value.replace(/\D/g, '').substring(0, 6))}
-                    InputProps={{
-                      style: {
-                        color: '#0F172A',
-                        backgroundColor: '#FFFFFF',
-                        fontWeight: 900,
-                        fontSize: 22,
-                        textAlign: 'center',
+                    slotProps={{
+                      input: {
+                        style: {
+                          color: '#0F172A',
+                          backgroundColor: '#FFFFFF',
+                          fontWeight: 900,
+                          fontSize: 22,
+                          textAlign: 'center',
+                        },
                       },
-                    }}
-                    inputProps={{
-                      style: {
-                        color: '#0F172A',
-                        WebkitTextFillColor: '#0F172A',
-                        backgroundColor: '#FFFFFF',
-                        fontWeight: 900,
-                        fontSize: 22,
-                        textAlign: 'center',
-                        letterSpacing: '8px',
+                      htmlInput: {
+                        style: {
+                          color: '#0F172A',
+                          WebkitTextFillColor: '#0F172A',
+                          backgroundColor: '#FFFFFF',
+                          fontWeight: 900,
+                          fontSize: 22,
+                          textAlign: 'center',
+                          letterSpacing: '8px',
+                        },
                       },
                     }}
                     sx={{
