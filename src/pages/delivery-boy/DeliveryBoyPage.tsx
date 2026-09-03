@@ -149,6 +149,7 @@ const PickupCard: React.FC<{
   const [newShopName, setNewShopName] = useState('');
   const [newShopPincode, setNewShopPincode] = useState('');
   const [creatingShop, setCreatingShop] = useState(false);
+  const addShopRef = useRef<HTMLDivElement>(null);
   const qc = useQueryClient();
 
   useEffect(() => {
@@ -156,6 +157,14 @@ const PickupCard: React.FC<{
       setSelectedShopId(assignedShopId);
     }
   }, [assignedShopId]);
+
+  useEffect(() => {
+    if (showAddShop && addShopRef.current) {
+      setTimeout(() => {
+        addShopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }, 100);
+    }
+  }, [showAddShop]);
 
   const handleCreateShop = async () => {
     if (!newShopName.trim() || !newShopPincode.trim()) return;
@@ -519,6 +528,7 @@ const PickupCard: React.FC<{
         }}
         maxWidth="xs"
         fullWidth
+        scroll="paper"
         slotProps={{
           paper: {
             sx: {
@@ -533,7 +543,30 @@ const PickupCard: React.FC<{
         <DialogTitle sx={{ fontWeight: 800, pb: 0.5, color: '#0F172A !important' }}>
           {confirmDialog?.label}
         </DialogTitle>
-        <DialogContent sx={{ color: '#0F172A !important' }}>
+        <DialogContent
+          dividers
+          sx={{
+            color: '#0F172A !important',
+            maxHeight: 'calc(80vh - 120px)',
+            overflowY: 'auto',
+            overscrollBehavior: 'contain',
+            WebkitOverflowScrolling: 'touch',
+            '&::-webkit-scrollbar': {
+              width: '6px',
+            },
+            '&::-webkit-scrollbar-track': {
+              background: '#F1F5F9',
+              borderRadius: '3px',
+            },
+            '&::-webkit-scrollbar-thumb': {
+              background: '#94A3B8',
+              borderRadius: '3px',
+            },
+            '&::-webkit-scrollbar-thumb:hover': {
+              background: '#64748B',
+            },
+          }}
+        >
           <Typography variant="body2" sx={{ color: '#475569 !important', mb: 1 }}>
             {confirmDialog?.status === 'Completed'
               ? `Confirm that you have collected the clothes for Order #${pickup.order?.orderNumber || `ORD-${String(pickup.id).padStart(5, '0')}`} from ${pickup.customer.firstName} ${pickup.customer.lastName}?`
@@ -680,6 +713,7 @@ const PickupCard: React.FC<{
               </Box>
 
               {showAddShop && (
+                <Box ref={addShopRef} sx={{ scrollMarginTop: '16px' }}>
                 <Card
                   variant="outlined"
                   sx={{
@@ -857,6 +891,7 @@ const PickupCard: React.FC<{
                     {creatingShop ? 'Creating Shop...' : '+ Create & Select Shop'}
                   </Button>
                 </Card>
+                </Box>
               )}
             </Box>
           )}
@@ -1835,7 +1870,31 @@ const DeliveryBoyPage: React.FC = () => {
       </Box>
 
       {/* ── Content Area ─────────────────────────────────────────────── */}
-      <Box sx={{ flex: 1, overflowY: 'auto', px: 2, pt: 2, pb: '90px' }}>
+      <Box
+        sx={{
+          flex: 1,
+          overflowY: 'auto',
+          overscrollBehavior: 'contain',
+          WebkitOverflowScrolling: 'touch',
+          touchAction: 'pan-y',
+          px: 2,
+          pt: 2,
+          pb: '120px',
+          '&::-webkit-scrollbar': {
+            width: '6px',
+          },
+          '&::-webkit-scrollbar-track': {
+            background: 'transparent',
+          },
+          '&::-webkit-scrollbar-thumb': {
+            background: '#CBD5E1',
+            borderRadius: '3px',
+          },
+          '&::-webkit-scrollbar-thumb:hover': {
+            background: '#94A3B8',
+          },
+        }}
+      >
 
         {/* Search Bar */}
         {activeTab !== 'profile' && (
