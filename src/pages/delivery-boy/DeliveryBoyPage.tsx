@@ -87,6 +87,68 @@ function buildAddress(customer: {
     .join(', ');
 }
 
+interface AddressHolder {
+  addressTitle?: string | null;
+  houseDetails?: string | null;
+  landmark?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  pincode?: string | null;
+}
+
+function resolveDisplayAddress(
+  order?: AddressHolder | null,
+  customer?: AddressHolder | null,
+  fallbackAddress?: string | null
+): { title: string | null; fullAddress: string } {
+  // 1. Order-specific snapshot address (takes top priority for the order)
+  if (order && (order.houseDetails || order.address || order.city || order.pincode)) {
+    const parts = [
+      order.houseDetails,
+      order.landmark ? `(Landmark: ${order.landmark})` : null,
+      order.address,
+      order.city,
+      order.state,
+      order.pincode,
+    ].filter(Boolean);
+    if (parts.length > 0) {
+      return {
+        title: order.addressTitle || null,
+        fullAddress: parts.join(', '),
+      };
+    }
+  }
+
+  // 2. Specific fallback string if provided and not generic
+  if (fallbackAddress && fallbackAddress.trim() && fallbackAddress.trim() !== 'Customer Address') {
+    return {
+      title: order?.addressTitle || null,
+      fullAddress: fallbackAddress.trim(),
+    };
+  }
+
+  // 3. Customer profile fallback
+  if (customer && (customer.houseDetails || customer.address || customer.city || customer.pincode)) {
+    const parts = [
+      customer.houseDetails,
+      customer.landmark ? `(Landmark: ${customer.landmark})` : null,
+      customer.address,
+      customer.city,
+      customer.state,
+      customer.pincode,
+    ].filter(Boolean);
+    if (parts.length > 0) {
+      return {
+        title: customer.addressTitle || null,
+        fullAddress: parts.join(', '),
+      };
+    }
+  }
+
+  return { title: null, fullAddress: fallbackAddress?.trim() || '' };
+}
+
 function openMaps(address: string) {
   if (!address || !address.trim()) {
     alert('Address not available for navigation.');
@@ -207,7 +269,8 @@ const PickupCard: React.FC<{
 
   const statusCfg = pickupStatusConfig[pickup.status] ?? pickupStatusConfig.Pending;
   const isDone = pickup.status === 'Completed' || pickup.status === 'Cancelled';
-  const address = buildAddress(pickup.customer) || pickup.pickupAddress;
+  const addrInfo = resolveDisplayAddress(pickup.order, pickup.customer, pickup.pickupAddress);
+  const address = addrInfo.fullAddress;
 
   return (
     <>
@@ -318,12 +381,30 @@ const PickupCard: React.FC<{
                 <Typography sx={{ fontWeight: 800, fontSize: 16, color: '#111827', mb: 0.25 }}>
                   {pickup.customer.firstName} {pickup.customer.lastName}
                 </Typography>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <LocationOnIcon sx={{ fontSize: 13, color: '#6366F1' }} />
-                  <Typography sx={{ fontSize: 12, color: '#374151', lineHeight: 1.4 }}>
-                    {address}
-                    {pickup.customer.pincode && ` - ${pickup.customer.pincode}`}
-                  </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5 }}>
+                  <LocationOnIcon sx={{ fontSize: 14, color: '#6366F1', mt: 0.2, flexShrink: 0 }} />
+                  <Box sx={{ flex: 1 }}>
+                    {addrInfo.title && (
+                      <Chip
+                        icon={<HomeIcon sx={{ fontSize: '11px !important' }} />}
+                        label={addrInfo.title}
+                        size="small"
+                        sx={{
+                          height: 18,
+                          fontSize: 10,
+                          fontWeight: 800,
+                          mr: 0.75,
+                          mb: 0.25,
+                          bgcolor: addrInfo.title.toLowerCase() === 'work' ? '#EEF2FF' : '#DCFCE7',
+                          color: addrInfo.title.toLowerCase() === 'work' ? '#4338CA' : '#15803D',
+                          border: addrInfo.title.toLowerCase() === 'work' ? '1px solid #C7D2FE' : '1px solid #BBF7D0',
+                        }}
+                      />
+                    )}
+                    <Typography component="span" sx={{ fontSize: 12, color: '#374151', lineHeight: 1.4 }}>
+                      {address || 'Address not specified'}
+                    </Typography>
+                  </Box>
                 </Box>
               </Box>
             </Box>
@@ -971,7 +1052,8 @@ const DeliveryCard: React.FC<{
   const statusCfg = deliveryStatusConfig[delivery.deliveryStatus] ?? deliveryStatusConfig.Pending;
   const isDone = delivery.deliveryStatus === 'Delivered' || delivery.deliveryStatus === 'Failed';
   const customer = delivery.order?.customer;
-  const address = customer ? buildAddress(customer) : '';
+  const addrInfo = resolveDisplayAddress(delivery.order, customer, null);
+  const address = addrInfo.fullAddress;
 
   return (
     <>
@@ -1081,11 +1163,29 @@ const DeliveryCard: React.FC<{
                   {customer.firstName} {customer.lastName}
                 </Typography>
                 <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5, mb: 1 }}>
-                  <LocationOnIcon sx={{ fontSize: 13, color: '#F59E0B', mt: 0.1 }} />
-                  <Typography sx={{ fontSize: 12, color: '#374151', lineHeight: 1.4, flex: 1 }}>
-                    {address}
-                    {customer.pincode && ` - ${customer.pincode}`}
-                  </Typography>
+                  <LocationOnIcon sx={{ fontSize: 14, color: '#F59E0B', mt: 0.2, flexShrink: 0 }} />
+                  <Box sx={{ flex: 1 }}>
+                    {addrInfo.title && (
+                      <Chip
+                        icon={<HomeIcon sx={{ fontSize: '11px !important' }} />}
+                        label={addrInfo.title}
+                        size="small"
+                        sx={{
+                          height: 18,
+                          fontSize: 10,
+                          fontWeight: 800,
+                          mr: 0.75,
+                          mb: 0.25,
+                          bgcolor: addrInfo.title.toLowerCase() === 'work' ? '#EEF2FF' : '#DCFCE7',
+                          color: addrInfo.title.toLowerCase() === 'work' ? '#4338CA' : '#15803D',
+                          border: addrInfo.title.toLowerCase() === 'work' ? '1px solid #C7D2FE' : '1px solid #BBF7D0',
+                        }}
+                      />
+                    )}
+                    <Typography component="span" sx={{ fontSize: 12, color: '#374151', lineHeight: 1.4 }}>
+                      {address || 'Address not specified'}
+                    </Typography>
+                  </Box>
                 </Box>
               </>
             )}
@@ -1557,7 +1657,7 @@ const DeliveryBoyPage: React.FC = () => {
   const { data: laundryShops = [] } = useQuery({ queryKey: ['laundry-shops'], queryFn: getLaundryShops });
 
   const {
-    data: pickups = [],
+    data: rawPickups = [],
     isLoading: pickupsLoading,
     isFetching: pickupsFetching,
     refetch: refetchPickups,
@@ -1583,6 +1683,31 @@ const DeliveryBoyPage: React.FC = () => {
     refetchOnWindowFocus: 'always',
     staleTime: 0,
   });
+
+  // Deduplicate pickups: one active card per order
+  const pickups = useMemo(() => {
+    const map = new Map<string, PickupAssignment>();
+    // Sort rawPickups: completed/cancelled first, then active so active replaces completed if same order
+    const sorted = [...(rawPickups as PickupAssignment[])].sort((a, b) => {
+      const aDone = a.status === 'Completed' || a.status === 'Cancelled' ? 0 : 1;
+      const bDone = b.status === 'Completed' || b.status === 'Cancelled' ? 0 : 1;
+      if (aDone !== bDone) return aDone - bDone;
+      return a.id - b.id;
+    });
+
+    for (const p of sorted) {
+      const dedupeKey = p.order?.id ? `order_${p.order.id}` : `pickup_${p.id}`;
+      map.set(dedupeKey, p);
+    }
+
+    // Sort active ones first, followed by newest ID
+    return Array.from(map.values()).sort((a, b) => {
+      const aDone = a.status === 'Completed' || a.status === 'Cancelled' ? 1 : 0;
+      const bDone = b.status === 'Completed' || b.status === 'Cancelled' ? 1 : 0;
+      if (aDone !== bDone) return aDone - bDone;
+      return b.id - a.id;
+    });
+  }, [rawPickups]);
 
   // Active heartbeat timer every 3 seconds to ensure polling never sleeps
   useEffect(() => {
@@ -1966,17 +2091,43 @@ const DeliveryBoyPage: React.FC = () => {
                 title={searchQuery ? "No Matching Pickups" : "No Pickups Assigned"}
                 subtitle={searchQuery ? "Try refining your search terms." : "You have no pickup tasks right now. Check back later or contact your manager."}
               />
-            ) : (
-              filteredPickups.map((pickup) => (
-                <PickupCard
-                  key={pickup.id}
-                  pickup={pickup}
-                  laundryShops={laundryShops}
-                  onAction={(id, status, shopId) => pickupMutation.mutate({ id, status, laundryShopId: shopId })}
-                  isLoading={pickupMutation.isPending}
-                />
-              ))
-            )}
+            ) : (() => {
+              const activeList = filteredPickups.filter(p => p.status === 'Pending' || p.status === 'Assigned');
+              const doneList = filteredPickups.filter(p => p.status === 'Completed' || p.status === 'Cancelled');
+              return (
+                <>
+                  {activeList.map((pickup) => (
+                    <PickupCard
+                      key={pickup.id}
+                      pickup={pickup}
+                      laundryShops={laundryShops}
+                      onAction={(id, status, shopId) => pickupMutation.mutate({ id, status, laundryShopId: shopId })}
+                      isLoading={pickupMutation.isPending}
+                    />
+                  ))}
+                  {doneList.length > 0 && (
+                    <Box sx={{ mt: 3, mb: 1.5 }}>
+                      <Divider sx={{ mb: 2 }}>
+                        <Chip
+                          label={`Completed Pickups (${doneList.length})`}
+                          size="small"
+                          sx={{ fontSize: 11, fontWeight: 800, bgcolor: '#F3F4F6', color: '#6B7280' }}
+                        />
+                      </Divider>
+                      {doneList.map((pickup) => (
+                        <PickupCard
+                          key={pickup.id}
+                          pickup={pickup}
+                          laundryShops={laundryShops}
+                          onAction={(id, status, shopId) => pickupMutation.mutate({ id, status, laundryShopId: shopId })}
+                          isLoading={pickupMutation.isPending}
+                        />
+                      ))}
+                    </Box>
+                  )}
+                </>
+              );
+            })()}
           </>
         )}
 

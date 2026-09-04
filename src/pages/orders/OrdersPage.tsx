@@ -462,9 +462,9 @@ const OrdersPage: React.FC = () => {
                 <Typography sx={{ fontWeight: 700, mb: 1 }}>Schedule & Instructions</Typography>
                 <Grid container spacing={2}>
                   <Grid size={{ xs: 12, sm: 4 }}>
-                    <Typography variant="caption" color="text.secondary">Scheduled Pickup</Typography>
+                    <Typography variant="caption" color="text.secondary">Customer Requested Pickup</Typography>
                     <Typography sx={{ fontWeight: 700 }}>
-                      {selectedOrder.pickupDate ? formatDate(selectedOrder.pickupDate) : 'Not scheduled'}
+                      {selectedOrder.pickupDate ? formatDate(selectedOrder.pickupDate) : 'Not requested'}
                     </Typography>
                   </Grid>
                   <Grid size={{ xs: 12, sm: 4 }}>
@@ -685,7 +685,7 @@ const OrdersPage: React.FC = () => {
             <Box>
               <Typography sx={{ fontWeight: 700 }}>Assign to Delivery Boy</Typography>
               <Typography variant="caption" color="text.secondary">
-                {selectedRowIds.ids.size} order{selectedRowIds.ids.size !== 1 ? 's' : ''} will be assigned for delivery
+                {selectedRowIds.ids.size} order{selectedRowIds.ids.size !== 1 ? 's' : ''} will be assigned for pickup & delivery
               </Typography>
             </Box>
           </Box>

@@ -37,6 +37,13 @@ export interface OrderInfo {
   netAmount?: number;
   paymentStatus?: string;
   laundryShop?: LaundryShopInfo;
+  addressTitle?: string | null;
+  houseDetails?: string | null;
+  landmark?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  pincode?: string | null;
 }
 
 export interface DeliveryAssignment {
@@ -62,6 +69,13 @@ export interface PickupAssignment {
     netAmount?: number;
     paymentStatus?: string;
     laundryShop?: LaundryShopInfo;
+    addressTitle?: string | null;
+    houseDetails?: string | null;
+    landmark?: string | null;
+    address?: string | null;
+    city?: string | null;
+    state?: string | null;
+    pincode?: string | null;
   } | null;
 }
 
