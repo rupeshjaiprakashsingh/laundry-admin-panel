@@ -35,6 +35,9 @@ import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
 import SearchIcon from '@mui/icons-material/Search';
 import ClearIcon from '@mui/icons-material/Clear';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
+import StorefrontIcon from '@mui/icons-material/Storefront';
 
 import {
   getMyDeliveries,
@@ -101,7 +104,9 @@ function resolveDisplayAddress(
   order?: AddressHolder | null,
   customer?: AddressHolder | null,
   fallbackAddress?: string | null
-): { title: string | null; fullAddress: string } {
+): { title: string | null; fullAddress: string; pincode?: string | null } {
+  const pin = order?.pincode || customer?.pincode || (fallbackAddress ? fallbackAddress.match(/\b\d{6}\b/)?.[0] : null) || null;
+
   // 1. Order-specific snapshot address (takes top priority for the order)
   if (order && (order.houseDetails || order.address || order.city || order.pincode)) {
     const parts = [
@@ -116,6 +121,7 @@ function resolveDisplayAddress(
       return {
         title: order.addressTitle || null,
         fullAddress: parts.join(', '),
+        pincode: pin,
       };
     }
   }
@@ -125,6 +131,7 @@ function resolveDisplayAddress(
     return {
       title: order?.addressTitle || null,
       fullAddress: fallbackAddress.trim(),
+      pincode: pin,
     };
   }
 
@@ -142,11 +149,12 @@ function resolveDisplayAddress(
       return {
         title: customer.addressTitle || null,
         fullAddress: parts.join(', '),
+        pincode: pin,
       };
     }
   }
 
-  return { title: null, fullAddress: fallbackAddress?.trim() || '' };
+  return { title: null, fullAddress: fallbackAddress?.trim() || '', pincode: pin };
 }
 
 function openMaps(address: string) {
@@ -271,6 +279,43 @@ const PickupCard: React.FC<{
   const isDone = pickup.status === 'Completed' || pickup.status === 'Cancelled';
   const addrInfo = resolveDisplayAddress(pickup.order, pickup.customer, pickup.pickupAddress);
   const address = addrInfo.fullAddress;
+  const customerPincode = addrInfo.pincode || pickup.customer?.pincode || (pickup.order as any)?.pincode || '';
+  const customerPin = String(customerPincode || '').trim();
+
+  // Find currently selected shop
+  const selectedShop = useMemo(() => {
+    if (!selectedShopId) return null;
+    return laundryShops.find((s: any) => String(s.id) === String(selectedShopId)) || null;
+  }, [laundryShops, selectedShopId]);
+
+  // Filtered & sorted laundry shops for inline selector
+  const filteredShops = useMemo(() => {
+    let list = [...laundryShops];
+    if (shopFilter.trim()) {
+      const q = shopFilter.toLowerCase().trim();
+      list = list.filter((shop: any) => {
+        const name = (shop.shopName || '').toLowerCase();
+        const pin = String(shop.pincode || '');
+        const addr = (shop.address || '').toLowerCase();
+        const city = (shop.city || '').toLowerCase();
+        return name.includes(q) || pin.includes(q) || addr.includes(q) || city.includes(q);
+      });
+    }
+
+    return list.sort((a: any, b: any) => {
+      const aSelected = String(a.id) === String(selectedShopId);
+      const bSelected = String(b.id) === String(selectedShopId);
+      if (aSelected && !bSelected) return -1;
+      if (!aSelected && bSelected) return 1;
+
+      const aNear = Boolean(customerPin && a.pincode && String(a.pincode).trim() === customerPin);
+      const bNear = Boolean(customerPin && b.pincode && String(b.pincode).trim() === customerPin);
+      if (aNear && !bNear) return -1;
+      if (!aNear && bNear) return 1;
+
+      return (a.shopName || '').localeCompare(b.shopName || '');
+    });
+  }, [laundryShops, shopFilter, customerPin, selectedShopId]);
 
   return (
     <>
@@ -617,21 +662,25 @@ const PickupCard: React.FC<{
               bgcolor: '#FFFFFF !important',
               color: '#0F172A !important',
               boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.1)',
+              m: { xs: 1.5, sm: 2 },
+              maxHeight: 'calc(100% - 32px)',
             },
           },
         }}
       >
-        <DialogTitle sx={{ fontWeight: 800, pb: 0.5, color: '#0F172A !important' }}>
+        <DialogTitle sx={{ fontWeight: 800, pb: 1, color: '#0F172A !important', fontSize: { xs: 16, sm: 18 } }}>
           {confirmDialog?.label}
         </DialogTitle>
         <DialogContent
           dividers
           sx={{
             color: '#0F172A !important',
-            maxHeight: 'calc(80vh - 120px)',
+            maxHeight: 'calc(75vh - 100px)',
             overflowY: 'auto',
             overscrollBehavior: 'contain',
             WebkitOverflowScrolling: 'touch',
+            px: { xs: 2, sm: 2.5 },
+            py: 2,
             '&::-webkit-scrollbar': {
               width: '6px',
             },
@@ -648,336 +697,471 @@ const PickupCard: React.FC<{
             },
           }}
         >
-          <Typography variant="body2" sx={{ color: '#475569 !important', mb: 1 }}>
+          <Typography variant="body2" sx={{ color: '#475569 !important', mb: 1.5, fontSize: 13.5, lineHeight: 1.5 }}>
             {confirmDialog?.status === 'Completed'
-              ? `Confirm that you have collected the clothes for Order #${pickup.order?.orderNumber || `ORD-${String(pickup.id).padStart(5, '0')}`} from ${pickup.customer.firstName} ${pickup.customer.lastName}?`
-              : `Are you sure you want to cancel pickup #${pickup.id} (Order #${pickup.order?.orderNumber || `ORD-${String(pickup.id).padStart(5, '0')}`})?`}
+              ? `Confirm that you have collected the clothes for Order #${pickup.order?.orderNumber || (pickup as any).orderNumber || `ORD-${String(pickup.id).padStart(5, '0')}`} from ${pickup.customer?.firstName || ''} ${pickup.customer?.lastName || ''}?`
+              : `Are you sure you want to cancel pickup #${pickup.id} (Order #${pickup.order?.orderNumber || (pickup as any).orderNumber || `ORD-${String(pickup.id).padStart(5, '0')}`})?`}
           </Typography>
 
           {confirmDialog?.status === 'Completed' && (
-            <Box sx={{ mt: 2 }}>
-              <Typography variant="body2" sx={{ fontWeight: 800, mb: 1, color: '#1E293B !important' }}>
-                Select Laundry Shop to drop clothes:
-              </Typography>
+            <Box sx={{ mt: 1.5 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                <Typography variant="body2" sx={{ fontWeight: 800, color: '#1E293B !important', fontSize: 13 }}>
+                  Select Laundry Shop to drop clothes:
+                </Typography>
+                {selectedShop && (
+                  <Chip
+                    label="Shop Selected ✓"
+                    size="small"
+                    sx={{
+                      height: 20,
+                      fontSize: 10,
+                      fontWeight: 800,
+                      bgcolor: '#DCFCE7 !important',
+                      color: '#166534 !important',
+                      border: '1px solid #BBF7D0',
+                    }}
+                  />
+                )}
+              </Box>
 
-              {/* Filter search if there are multiple shops */}
-              {laundryShops.length > 4 && (
-                <TextField
-                  fullWidth
-                  size="small"
-                  placeholder="🔍 Search shop name or pincode..."
-                  value={shopFilter}
-                  onChange={(e) => setShopFilter(e.target.value)}
-                  slotProps={{
-                    input: {
-                      endAdornment: shopFilter ? (
-                        <IconButton size="small" onClick={() => setShopFilter('')}>
-                          <ClearIcon sx={{ fontSize: 16 }} />
-                        </IconButton>
-                      ) : null,
-                    },
-                  }}
+              {/* Selected Shop Active Banner */}
+              {selectedShop && (
+                <Box
                   sx={{
+                    p: 1.25,
                     mb: 1.5,
-                    bgcolor: '#FFFFFF',
-                    borderRadius: 1.5,
-                    '& .MuiInputBase-input': { fontSize: 13, py: 0.9 },
-                  }}
-                />
-              )}
-
-              <FormControl fullWidth size="small" sx={{ mb: 1.5 }}>
-                <InputLabel id="select-laundry-shop-label" sx={{ color: '#334155', fontWeight: 800 }}>
-                  Select Laundry Shop
-                </InputLabel>
-                <Select
-                  labelId="select-laundry-shop-label"
-                  id="select-laundry-shop"
-                  value={selectedShopId || ''}
-                  label="Select Laundry Shop"
-                  onChange={(e) => {
-                    setSelectedShopId(e.target.value);
-                    if (e.target.value) {
-                      setShowAddShop(false);
-                    }
-                  }}
-                  displayEmpty
-                  MenuProps={{
-                    slotProps: {
-                      paper: {
-                        sx: {
-                          maxHeight: 280,
-                          borderRadius: 2,
-                          boxShadow: '0 10px 25px rgba(0,0,0,0.15)',
-                          '& .MuiMenuItem-root': {
-                            py: 1.2,
-                            fontSize: 13.5,
-                            fontWeight: 600,
-                            color: '#0F172A',
-                            '&:hover': { bgcolor: '#EEF2FF' },
-                            '&.Mui-selected': { bgcolor: '#E0E7FF !important', fontWeight: 800 },
-                          },
-                        },
-                      },
-                    },
-                  }}
-                  sx={{
-                    bgcolor: '#F8FAFC',
-                    borderRadius: 1.5,
-                    fontWeight: 700,
-                    color: '#0F172A',
-                    '& .MuiOutlinedInput-notchedOutline': {
-                      borderColor: '#94A3B8',
-                      borderWidth: '1.5px',
-                    },
-                    '&:hover .MuiOutlinedInput-notchedOutline': {
-                      borderColor: '#4F46E5',
-                    },
-                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                      borderColor: '#4F46E5',
-                      borderWidth: '2px',
-                    },
+                    bgcolor: '#EEF2FF',
+                    borderRadius: 2,
+                    border: '1.5px solid #6366F1',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
                   }}
                 >
-                  <MenuItem value="" disabled sx={{ color: '#94A3B8' }}>
-                    <em>-- Choose a Laundry Shop ({laundryShops.length} available) --</em>
-                  </MenuItem>
-                  {laundryShops
-                    .filter((shop: any) => {
-                      if (!shopFilter) return true;
-                      const q = shopFilter.toLowerCase();
-                      return (
-                        shop.shopName?.toLowerCase().includes(q) ||
-                        shop.pincode?.includes(q)
-                      );
-                    })
-                    .map((shop: any) => (
-                      <MenuItem key={shop.id} value={shop.id}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                          <Typography sx={{ fontSize: 13.5, fontWeight: 700, color: '#0F172A' }}>
-                            🏪 {shop.shopName}
-                          </Typography>
-                          {shop.pincode && (
-                            <Chip
-                              label={`PIN: ${shop.pincode}`}
-                              size="small"
-                              sx={{
-                                height: 20,
-                                fontSize: 10.5,
-                                fontWeight: 700,
-                                bgcolor: '#E0E7FF',
-                                color: '#3730A3',
-                                ml: 1,
-                              }}
-                            />
-                          )}
-                        </Box>
-                      </MenuItem>
-                    ))}
-                </Select>
-              </FormControl>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+                    <StorefrontIcon sx={{ color: '#4F46E5', fontSize: 20, flexShrink: 0 }} />
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography sx={{ fontWeight: 800, fontSize: 13, color: '#1E1B4B' }} noWrap>
+                        {selectedShop.shopName}
+                      </Typography>
+                      <Typography sx={{ fontSize: 11, color: '#4338CA', fontWeight: 600 }}>
+                        {selectedShop.pincode ? `PIN: ${selectedShop.pincode}` : ''}
+                        {selectedShop.address ? ` • ${selectedShop.address}` : ''}
+                      </Typography>
+                    </Box>
+                  </Box>
+                  <Button
+                    size="small"
+                    variant="text"
+                    onClick={() => setSelectedShopId('')}
+                    sx={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: '#6366F1 !important',
+                      p: 0.5,
+                      minWidth: 0,
+                      textTransform: 'none',
+                      '&:hover': { bgcolor: 'transparent', textDecoration: 'underline' },
+                    }}
+                  >
+                    Change
+                  </Button>
+                </Box>
+              )}
 
-              <Box sx={{ textAlign: 'right' }}>
+              {/* Instant Search Bar */}
+              <TextField
+                fullWidth
+                size="small"
+                placeholder="🔍 Search shop name or pincode..."
+                value={shopFilter}
+                onChange={(e) => setShopFilter(e.target.value)}
+                slotProps={{
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon sx={{ color: '#6366F1', fontSize: 18 }} />
+                      </InputAdornment>
+                    ),
+                    endAdornment: shopFilter ? (
+                      <InputAdornment position="end">
+                        <IconButton size="small" onClick={() => setShopFilter('')} sx={{ p: 0.25 }}>
+                          <ClearIcon sx={{ fontSize: 14 }} />
+                        </IconButton>
+                      </InputAdornment>
+                    ) : null,
+                  },
+                }}
+                sx={{
+                  mb: 1.5,
+                  bgcolor: '#FFFFFF !important',
+                  borderRadius: 2,
+                  '& .MuiInputBase-root': {
+                    bgcolor: '#F8FAFC !important',
+                    borderRadius: 2,
+                    height: 40,
+                  },
+                  '& .MuiInputBase-input': {
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: '#0F172A !important',
+                    WebkitTextFillColor: '#0F172A !important',
+                    py: 1,
+                  },
+                  '& .MuiOutlinedInput-notchedOutline': {
+                    borderColor: '#CBD5E1 !important',
+                  },
+                  '&:hover .MuiOutlinedInput-notchedOutline': {
+                    borderColor: '#6366F1 !important',
+                  },
+                  '& .Mui-focused .MuiOutlinedInput-notchedOutline': {
+                    borderColor: '#4F46E5 !important',
+                    borderWidth: '2px !important',
+                  },
+                }}
+              />
+
+              {/* Inline Scrollable Shop Selection List (NO floating popovers) */}
+              <Box
+                sx={{
+                  maxHeight: 210,
+                  overflowY: 'auto',
+                  pr: 0.5,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 1,
+                  overscrollBehavior: 'contain',
+                  WebkitOverflowScrolling: 'touch',
+                  '&::-webkit-scrollbar': { width: '5px' },
+                  '&::-webkit-scrollbar-track': { background: '#F1F5F9', borderRadius: '3px' },
+                  '&::-webkit-scrollbar-thumb': { background: '#CBD5E1', borderRadius: '3px' },
+                  '&::-webkit-scrollbar-thumb:hover': { background: '#94A3B8' },
+                }}
+              >
+                {filteredShops.length === 0 ? (
+                  <Box
+                    sx={{
+                      p: 2,
+                      textAlign: 'center',
+                      bgcolor: '#F8FAFC',
+                      borderRadius: 2,
+                      border: '1px dashed #CBD5E1',
+                    }}
+                  >
+                    <Typography sx={{ fontSize: 12, fontWeight: 700, color: '#64748B !important', mb: 1 }}>
+                      {shopFilter ? `No shops found matching "${shopFilter}"` : 'No active laundry shops found.'}
+                    </Typography>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() => {
+                        if (shopFilter.trim()) setNewShopName(shopFilter.trim());
+                        if (customerPin) setNewShopPincode(customerPin);
+                        setShowAddShop(true);
+                      }}
+                      sx={{
+                        fontSize: 11,
+                        fontWeight: 800,
+                        textTransform: 'none',
+                        borderRadius: 1.5,
+                        borderColor: '#6366F1',
+                        color: '#4F46E5',
+                      }}
+                    >
+                      + Add {shopFilter ? `"${shopFilter.trim()}"` : 'New Shop'}
+                    </Button>
+                  </Box>
+                ) : (
+                  filteredShops.map((shop: any) => {
+                    const isSelected = String(shop.id) === String(selectedShopId);
+                    const isNear = Boolean(customerPin && shop.pincode && String(shop.pincode).trim() === customerPin);
+
+                    return (
+                      <Box
+                        key={shop.id}
+                        onClick={() => {
+                          setSelectedShopId(shop.id);
+                          setShowAddShop(false);
+                        }}
+                        sx={{
+                          p: 1.25,
+                          borderRadius: 2,
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease',
+                          bgcolor: isSelected ? '#EEF2FF !important' : '#FFFFFF !important',
+                          border: isSelected ? '2px solid #4F46E5 !important' : '1px solid #E2E8F0 !important',
+                          boxShadow: isSelected ? '0 2px 8px rgba(79, 70, 229, 0.18)' : '0 1px 2px rgba(0,0,0,0.03)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 1.25,
+                          '&:hover': {
+                            bgcolor: isSelected ? '#EEF2FF !important' : '#F8FAFC !important',
+                            borderColor: isSelected ? '#4F46E5 !important' : '#CBD5E1 !important',
+                          },
+                        }}
+                      >
+                        {isSelected ? (
+                          <CheckCircleIcon sx={{ color: '#4F46E5', fontSize: 20, flexShrink: 0 }} />
+                        ) : (
+                          <RadioButtonUncheckedIcon sx={{ color: '#94A3B8', fontSize: 20, flexShrink: 0 }} />
+                        )}
+
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
+                            <Typography
+                              sx={{
+                                fontWeight: isSelected ? 800 : 700,
+                                fontSize: 13,
+                                color: isSelected ? '#1E1B4B !important' : '#0F172A !important',
+                              }}
+                            >
+                              🏪 {shop.shopName}
+                            </Typography>
+                            {isNear && (
+                              <Chip
+                                label="📍 Near Customer"
+                                size="small"
+                                sx={{
+                                  height: 18,
+                                  fontSize: 9.5,
+                                  fontWeight: 800,
+                                  bgcolor: '#DCFCE7 !important',
+                                  color: '#15803D !important',
+                                  border: '1px solid #BBF7D0',
+                                }}
+                              />
+                            )}
+                          </Box>
+
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.25, flexWrap: 'wrap' }}>
+                            {shop.pincode && (
+                              <Typography
+                                sx={{
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  color: isSelected ? '#4338CA !important' : '#6366F1 !important',
+                                }}
+                              >
+                                PIN: {shop.pincode}
+                              </Typography>
+                            )}
+                            {(shop.address || shop.city) && (
+                              <Typography
+                                sx={{
+                                  fontSize: 11,
+                                  color: '#64748B !important',
+                                  whiteSpace: 'nowrap',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  maxWidth: 200,
+                                }}
+                              >
+                                {[shop.address, shop.city].filter(Boolean).join(', ')}
+                              </Typography>
+                            )}
+                          </Box>
+                        </Box>
+                      </Box>
+                    );
+                  })
+                )}
+              </Box>
+
+              {/* Add New Shop Button Toggle */}
+              <Box
+                sx={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  mt: 1.5,
+                  pt: 1,
+                  borderTop: '1px solid #F1F5F9',
+                }}
+              >
+                <Typography sx={{ fontSize: 11, color: '#64748B !important' }}>
+                  Don't see the laundry shop in list?
+                </Typography>
                 <Button
                   size="small"
                   variant="text"
                   onClick={() => {
-                    if (!showAddShop) {
-                      setSelectedShopId('');
+                    if (!showAddShop && customerPin && !newShopPincode) {
+                      setNewShopPincode(customerPin);
                     }
                     setShowAddShop(!showAddShop);
                   }}
-                  sx={{ textTransform: 'none', fontWeight: 800, fontSize: 12, color: '#4F46E5 !important' }}
+                  sx={{
+                    textTransform: 'none',
+                    fontWeight: 800,
+                    fontSize: 12,
+                    color: '#4F46E5 !important',
+                    p: 0.5,
+                    '&:hover': { bgcolor: '#EEF2FF' },
+                  }}
                 >
-                  {showAddShop ? 'Cancel Add New Shop' : '+ Add New Laundry Shop'}
+                  {showAddShop ? 'Cancel Add' : '+ Add New Shop'}
                 </Button>
               </Box>
 
+              {/* Add New Shop Collapsible Form */}
               {showAddShop && (
-                <Box ref={addShopRef} sx={{ scrollMarginTop: '16px' }}>
-                <Card
-                  variant="outlined"
-                  sx={{
-                    p: 2,
-                    mt: 1.5,
-                    bgcolor: '#F8FAFC !important',
-                    borderRadius: 2,
-                    border: '2px solid #6366F1',
-                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.08)',
-                  }}
-                >
-                  <Typography
-                    variant="caption"
+                <Box ref={addShopRef} sx={{ scrollMarginTop: '16px', mt: 1 }}>
+                  <Card
+                    variant="outlined"
                     sx={{
-                      fontWeight: 800,
-                      display: 'block',
-                      mb: 1.5,
-                      color: '#1E293B !important',
-                      fontSize: 12,
-                      letterSpacing: 0.5,
+                      p: 1.75,
+                      bgcolor: '#F8FAFC !important',
+                      borderRadius: 2,
+                      border: '2px solid #6366F1',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.08)',
                     }}
                   >
-                    ✨ NEW LAUNDRY SHOP DETAILS:
-                  </Typography>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Shop Name"
-                    placeholder="e.g. Ashok Laundry"
-                    value={newShopName}
-                    onChange={(e) => setNewShopName(e.target.value)}
-                    slotProps={{
-                      input: {
-                        style: {
-                          color: '#0F172A',
-                          backgroundColor: '#FFFFFF',
-                          fontSize: 14,
-                          fontWeight: 600,
-                        },
-                      },
-                      htmlInput: {
-                        style: {
-                          color: '#0F172A',
-                          WebkitTextFillColor: '#0F172A',
-                          backgroundColor: '#FFFFFF',
-                          fontSize: 14,
-                          fontWeight: 600,
-                        },
-                      },
-                      inputLabel: {
-                        shrink: true,
-                        style: {
-                          color: '#1E293B',
-                          fontWeight: 800,
-                          fontSize: 13,
-                        },
-                      },
-                    }}
-                    sx={{
-                      mb: 1.5,
-                      bgcolor: '#FFFFFF !important',
-                      borderRadius: 1.5,
-                      '& .MuiInputBase-root': {
-                        bgcolor: '#FFFFFF !important',
-                        color: '#0F172A !important',
-                      },
-                      '& .MuiInputBase-input': {
-                        color: '#0F172A !important',
-                        WebkitTextFillColor: '#0F172A !important',
-                        bgcolor: '#FFFFFF !important',
-                      },
-                      '& .MuiInputLabel-root': {
-                        color: '#1E293B !important',
+                    <Typography
+                      variant="caption"
+                      sx={{
                         fontWeight: 800,
-                      },
-                      '& .MuiOutlinedInput-notchedOutline': {
-                        borderColor: '#94A3B8 !important',
-                        borderWidth: '1.5px !important',
-                      },
-                      '&:hover .MuiOutlinedInput-notchedOutline': {
-                        borderColor: '#4F46E5 !important',
-                      },
-                      '& .Mui-focused .MuiOutlinedInput-notchedOutline': {
-                        borderColor: '#4F46E5 !important',
-                        borderWidth: '2px !important',
-                      },
-                    }}
-                  />
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Pincode"
-                    placeholder="e.g. 400078"
-                    value={newShopPincode}
-                    onChange={(e) => setNewShopPincode(e.target.value.replace(/\D/g, '').substring(0, 6))}
-                    slotProps={{
-                      input: {
-                        style: {
-                          color: '#0F172A',
-                          backgroundColor: '#FFFFFF',
-                          fontSize: 14,
-                          fontWeight: 600,
-                        },
-                      },
-                      htmlInput: {
-                        style: {
-                          color: '#0F172A',
-                          WebkitTextFillColor: '#0F172A',
-                          backgroundColor: '#FFFFFF',
-                          fontSize: 14,
-                          fontWeight: 600,
-                        },
-                      },
-                      inputLabel: {
-                        shrink: true,
-                        style: {
-                          color: '#1E293B',
-                          fontWeight: 800,
-                          fontSize: 13,
-                        },
-                      },
-                    }}
-                    sx={{
-                      mb: 2,
-                      bgcolor: '#FFFFFF !important',
-                      borderRadius: 1.5,
-                      '& .MuiInputBase-root': {
-                        bgcolor: '#FFFFFF !important',
-                        color: '#0F172A !important',
-                      },
-                      '& .MuiInputBase-input': {
-                        color: '#0F172A !important',
-                        WebkitTextFillColor: '#0F172A !important',
-                        bgcolor: '#FFFFFF !important',
-                      },
-                      '& .MuiInputLabel-root': {
+                        display: 'block',
+                        mb: 1.25,
                         color: '#1E293B !important',
+                        fontSize: 12,
+                        letterSpacing: 0.5,
+                      }}
+                    >
+                      ✨ NEW LAUNDRY SHOP DETAILS:
+                    </Typography>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label="Shop Name"
+                      placeholder="e.g. Ashok Laundry"
+                      value={newShopName}
+                      onChange={(e) => setNewShopName(e.target.value)}
+                      slotProps={{
+                        input: {
+                          style: {
+                            color: '#0F172A',
+                            backgroundColor: '#FFFFFF',
+                            fontSize: 13.5,
+                            fontWeight: 600,
+                          },
+                        },
+                        htmlInput: {
+                          style: {
+                            color: '#0F172A',
+                            WebkitTextFillColor: '#0F172A',
+                            backgroundColor: '#FFFFFF',
+                            fontSize: 13.5,
+                            fontWeight: 600,
+                          },
+                        },
+                        inputLabel: {
+                          shrink: true,
+                          style: {
+                            color: '#1E293B',
+                            fontWeight: 800,
+                            fontSize: 13,
+                          },
+                        },
+                      }}
+                      sx={{
+                        mb: 1.25,
+                        bgcolor: '#FFFFFF !important',
+                        borderRadius: 1.5,
+                        '& .MuiInputBase-root': { bgcolor: '#FFFFFF !important', color: '#0F172A !important' },
+                        '& .MuiInputBase-input': { color: '#0F172A !important', WebkitTextFillColor: '#0F172A !important' },
+                        '& .MuiInputLabel-root': { color: '#1E293B !important', fontWeight: 800 },
+                        '& .MuiOutlinedInput-notchedOutline': { borderColor: '#94A3B8 !important', borderWidth: '1.5px !important' },
+                        '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#4F46E5 !important' },
+                        '& .Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#4F46E5 !important', borderWidth: '2px !important' },
+                      }}
+                    />
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label="Pincode (6 Digits)"
+                      placeholder="e.g. 400078"
+                      value={newShopPincode}
+                      onChange={(e) => setNewShopPincode(e.target.value.replace(/\D/g, '').substring(0, 6))}
+                      slotProps={{
+                        input: {
+                          style: {
+                            color: '#0F172A',
+                            backgroundColor: '#FFFFFF',
+                            fontSize: 13.5,
+                            fontWeight: 600,
+                          },
+                        },
+                        htmlInput: {
+                          style: {
+                            color: '#0F172A',
+                            WebkitTextFillColor: '#0F172A',
+                            backgroundColor: '#FFFFFF',
+                            fontSize: 13.5,
+                            fontWeight: 600,
+                          },
+                        },
+                        inputLabel: {
+                          shrink: true,
+                          style: {
+                            color: '#1E293B',
+                            fontWeight: 800,
+                            fontSize: 13,
+                          },
+                        },
+                      }}
+                      sx={{
+                        mb: 1.5,
+                        bgcolor: '#FFFFFF !important',
+                        borderRadius: 1.5,
+                        '& .MuiInputBase-root': { bgcolor: '#FFFFFF !important', color: '#0F172A !important' },
+                        '& .MuiInputBase-input': { color: '#0F172A !important', WebkitTextFillColor: '#0F172A !important' },
+                        '& .MuiInputLabel-root': { color: '#1E293B !important', fontWeight: 800 },
+                        '& .MuiOutlinedInput-notchedOutline': { borderColor: '#94A3B8 !important', borderWidth: '1.5px !important' },
+                        '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#4F46E5 !important' },
+                        '& .Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#4F46E5 !important', borderWidth: '2px !important' },
+                      }}
+                    />
+                    <Button
+                      fullWidth
+                      size="medium"
+                      variant="contained"
+                      disabled={creatingShop || !newShopName.trim() || !newShopPincode.trim()}
+                      onClick={handleCreateShop}
+                      sx={{
+                        textTransform: 'none',
                         fontWeight: 800,
-                      },
-                      '& .MuiOutlinedInput-notchedOutline': {
-                        borderColor: '#94A3B8 !important',
-                        borderWidth: '1.5px !important',
-                      },
-                      '&:hover .MuiOutlinedInput-notchedOutline': {
-                        borderColor: '#4F46E5 !important',
-                      },
-                      '& .Mui-focused .MuiOutlinedInput-notchedOutline': {
-                        borderColor: '#4F46E5 !important',
-                        borderWidth: '2px !important',
-                      },
-                    }}
-                  />
-                  <Button
-                    fullWidth
-                    size="medium"
-                    variant="contained"
-                    disabled={creatingShop || !newShopName.trim() || !newShopPincode.trim()}
-                    onClick={handleCreateShop}
-                    sx={{
-                      textTransform: 'none',
-                      fontWeight: 800,
-                      py: 1.2,
-                      fontSize: 13,
-                      bgcolor: '#4F46E5 !important',
-                      color: '#FFFFFF !important',
-                      borderRadius: 1.5,
-                      boxShadow: '0 2px 4px rgba(79, 70, 229, 0.3)',
-                      '&:hover': { bgcolor: '#4338CA !important' },
-                      '&.Mui-disabled': {
-                        bgcolor: '#E2E8F0 !important',
-                        color: '#94A3B8 !important',
-                      },
-                    }}
-                  >
-                    {creatingShop ? 'Creating Shop...' : '+ Create & Select Shop'}
-                  </Button>
-                </Card>
+                        py: 1,
+                        fontSize: 13,
+                        bgcolor: '#4F46E5 !important',
+                        color: '#FFFFFF !important',
+                        borderRadius: 1.5,
+                        boxShadow: '0 2px 4px rgba(79, 70, 229, 0.3)',
+                        '&:hover': { bgcolor: '#4338CA !important' },
+                        '&.Mui-disabled': { bgcolor: '#E2E8F0 !important', color: '#94A3B8 !important' },
+                      }}
+                    >
+                      {creatingShop ? 'Creating Shop...' : '+ Create & Select Shop'}
+                    </Button>
+                  </Card>
                 </Box>
               )}
             </Box>
           )}
         </DialogContent>
-        <DialogActions sx={{ px: 2, pb: 2 }}>
+        <DialogActions
+          sx={{
+            px: { xs: 2, sm: 2.5 },
+            pb: { xs: 2, sm: 2.5 },
+            pt: 1.5,
+            borderTop: '1px solid #E2E8F0',
+            display: 'flex',
+            gap: 1,
+            bgcolor: '#FAFAFA',
+            borderBottomLeftRadius: 12,
+            borderBottomRightRadius: 12,
+          }}
+        >
           <Button
             onClick={() => {
               setConfirmDialog(null);
@@ -986,7 +1170,16 @@ const PickupCard: React.FC<{
               setNewShopPincode('');
               setShopFilter('');
             }}
-            sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600 }}
+            sx={{
+              flex: 1,
+              borderRadius: 2,
+              textTransform: 'none',
+              fontWeight: 700,
+              fontSize: 13,
+              color: '#475569 !important',
+              bgcolor: '#F1F5F9',
+              '&:hover': { bgcolor: '#E2E8F0' },
+            }}
           >
             No, Go Back
           </Button>
@@ -1004,12 +1197,33 @@ const PickupCard: React.FC<{
               }
             }}
             sx={{
-              borderRadius: 2, textTransform: 'none', fontWeight: 700,
-              bgcolor: confirmDialog?.status === 'Completed' ? '#10B981' : '#EF4444',
-              '&:hover': { bgcolor: confirmDialog?.status === 'Completed' ? '#059669' : '#DC2626' },
+              flex: 1.5,
+              borderRadius: 2,
+              textTransform: 'none',
+              fontWeight: 800,
+              fontSize: 13,
+              bgcolor: confirmDialog?.status === 'Completed' ? '#10B981 !important' : '#EF4444 !important',
+              color: '#FFFFFF !important',
+              boxShadow: confirmDialog?.status === 'Completed'
+                ? '0 2px 8px rgba(16, 185, 129, 0.35)'
+                : '0 2px 8px rgba(239, 68, 68, 0.35)',
+              '&:hover': {
+                bgcolor: confirmDialog?.status === 'Completed' ? '#059669 !important' : '#DC2626 !important',
+              },
+              '&.Mui-disabled': {
+                bgcolor: '#E2E8F0 !important',
+                color: '#94A3B8 !important',
+                boxShadow: 'none',
+              },
             }}
           >
-            {isLoading ? <CircularProgress size={16} color="inherit" /> : 'Yes, Confirm'}
+            {isLoading ? (
+              <CircularProgress size={16} color="inherit" />
+            ) : confirmDialog?.status === 'Completed' ? (
+              selectedShop ? `Drop to ${selectedShop.shopName.length > 15 ? selectedShop.shopName.substring(0, 15) + '...' : selectedShop.shopName} ✓` : 'Select Shop to Confirm'
+            ) : (
+              'Yes, Cancel Pickup'
+            )}
           </Button>
         </DialogActions>
       </Dialog>
@@ -1422,6 +1636,24 @@ const DeliveryCard: React.FC<{
                     <Select
                       value={collectedPaymentMode}
                       onChange={(e) => setCollectedPaymentMode(e.target.value)}
+                      MenuProps={{
+                        slotProps: {
+                          paper: {
+                            sx: {
+                              bgcolor: '#FFFFFF !important',
+                              color: '#0F172A !important',
+                              boxShadow: '0 10px 25px rgba(0,0,0,0.15)',
+                              '& .MuiMenuItem-root': {
+                                color: '#0F172A !important',
+                                fontWeight: 600,
+                                fontSize: 13,
+                                '&:hover': { bgcolor: '#F1F5F9' },
+                                '&.Mui-selected': { bgcolor: '#EEF2FF !important', color: '#4F46E5 !important', fontWeight: 800 },
+                              },
+                            },
+                          },
+                        },
+                      }}
                       sx={{
                         bgcolor: '#FFFFFF !important',
                         color: '#0F172A !important',
@@ -1783,17 +2015,26 @@ const DeliveryBoyPage: React.FC = () => {
       const firstName = cust?.firstName?.toLowerCase() || '';
       const lastName = cust?.lastName?.toLowerCase() || '';
       const mobile = cust?.mobileNumber || '';
-      const addr = p.pickupAddress?.toLowerCase() || '';
-      const orderNum = p.order?.orderNumber?.toLowerCase() || '';
+      const addrInfo = resolveDisplayAddress(p.order, cust, p.pickupAddress);
+      const fullAddr = addrInfo.fullAddress.toLowerCase();
+      const pin = (addrInfo.pincode || '').toLowerCase();
+      const orderNum = (p.order?.orderNumber || (p as any).orderNumber || '').toLowerCase();
       const pickupIdStr = String(p.id);
+      const shopName = (p.order?.laundryShop?.shopName || '').toLowerCase();
+      const shopPincode = (p.order?.laundryShop?.pincode || '').toLowerCase();
+      const status = (p.status || '').toLowerCase();
 
       return firstName.includes(query) ||
              lastName.includes(query) ||
              `${firstName} ${lastName}`.includes(query) ||
              mobile.includes(query) ||
-             addr.includes(query) ||
+             fullAddr.includes(query) ||
+             pin.includes(query) ||
              orderNum.includes(query) ||
-             pickupIdStr.includes(query);
+             pickupIdStr.includes(query) ||
+             shopName.includes(query) ||
+             shopPincode.includes(query) ||
+             status.includes(query);
     });
   }, [pickups, searchQuery]);
 
@@ -1806,15 +2047,26 @@ const DeliveryBoyPage: React.FC = () => {
       const firstName = cust?.firstName?.toLowerCase() || '';
       const lastName = cust?.lastName?.toLowerCase() || '';
       const mobile = cust?.mobileNumber || '';
-      const orderNum = order?.orderNumber?.toLowerCase() || '';
+      const addrInfo = resolveDisplayAddress(order, cust, null);
+      const fullAddr = addrInfo.fullAddress.toLowerCase();
+      const pin = (addrInfo.pincode || '').toLowerCase();
+      const orderNum = (order?.orderNumber || '').toLowerCase();
       const deliveryIdStr = String(d.id);
+      const shopName = (order?.laundryShop?.shopName || '').toLowerCase();
+      const shopPincode = (order?.laundryShop?.pincode || '').toLowerCase();
+      const status = (d.deliveryStatus || '').toLowerCase();
 
       return firstName.includes(query) ||
              lastName.includes(query) ||
              `${firstName} ${lastName}`.includes(query) ||
              mobile.includes(query) ||
+             fullAddr.includes(query) ||
+             pin.includes(query) ||
              orderNum.includes(query) ||
-             deliveryIdStr.includes(query);
+             deliveryIdStr.includes(query) ||
+             shopName.includes(query) ||
+             shopPincode.includes(query) ||
+             status.includes(query);
     });
   }, [deliveries, searchQuery]);
 
@@ -2026,7 +2278,7 @@ const DeliveryBoyPage: React.FC = () => {
           <TextField
             fullWidth
             size="small"
-            placeholder="Search customer, phone, or address..."
+            placeholder="🔍 Search customer, phone, address, shop, or order #..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             sx={{
