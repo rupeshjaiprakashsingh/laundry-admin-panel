@@ -25,9 +25,9 @@ import type { LaundryShop, Order } from '../../types';
 import { formatDate, formatCurrency } from '../../utils/export';
 
 const statusColors: Record<string, 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning'> = {
-  'New Order': 'info', 'Pickup Scheduled': 'primary', 'Picked Up': 'secondary',
-  Processing: 'warning', Washing: 'warning', 'Dry Cleaning': 'warning', Ironing: 'warning',
-  'Out For Delivery': 'secondary', Delivered: 'success', Cancelled: 'error',
+  'New Order': 'info', 'Pickup Scheduled': 'warning', 'Picked Up': 'secondary',
+  Laundry: 'warning', Processing: 'warning', Washing: 'warning', 'Dry Cleaning': 'warning', Ironing: 'warning',
+  'Ready For Delivery': 'info', 'Out For Delivery': 'primary', Delivered: 'success', Cancelled: 'error',
 };
 
 const emptyForm: Partial<LaundryShop> = {

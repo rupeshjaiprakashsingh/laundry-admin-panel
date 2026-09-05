@@ -27,15 +27,31 @@ import type { Order, LaundryShop, Employee } from '../../types';
 import api from '../../api/axios';
 
 const ORDER_STATUSES = [
-  'New Order', 'Picked Up', 'Laundry',
-  'Out For Delivery', 'Delivered',
+  'New Order',
+  'Pickup Scheduled',
+  'Picked Up',
+  'Laundry',
+  'Processing',
+  'Ready For Delivery',
+  'Out For Delivery',
+  'Delivered',
+  'Cancelled',
 ];
 const PAYMENT_STATUSES = ['Pending', 'Paid', 'Partially Paid'];
 
 const statusColors: Record<string, 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning'> = {
-  'New Order': 'info', 'Picked Up': 'secondary',
+  'New Order': 'info',
+  'Pickup Scheduled': 'warning',
+  'Picked Up': 'secondary',
   Laundry: 'warning',
-  'Out For Delivery': 'secondary', Delivered: 'success',
+  Processing: 'warning',
+  Washing: 'warning',
+  'Dry Cleaning': 'warning',
+  Ironing: 'warning',
+  'Ready For Delivery': 'info',
+  'Out For Delivery': 'primary',
+  Delivered: 'success',
+  Cancelled: 'error',
 };
 const paymentColors: Record<string, 'default' | 'success' | 'warning' | 'error'> = {
   Paid: 'success', Pending: 'warning', 'Partially Paid': 'error',

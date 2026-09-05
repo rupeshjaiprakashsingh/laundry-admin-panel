@@ -207,7 +207,7 @@ const DeliveriesPage: React.FC = () => {
   // Orders ready for delivery but NOT yet assigned
   const unassignedReadyOrders = useMemo(() =>
     (orders as Order[]).filter(o =>
-      o.orderStatus === 'Laundry' &&
+      ['Laundry', 'Ready For Delivery', 'Processing'].includes(o.orderStatus) &&
       (!o.deliveries || o.deliveries.length === 0)
     ), [orders]);
 
