@@ -200,31 +200,33 @@ const DrawerContent: React.FC<DrawerContentProps> = ({
       {/* Nav Items Scroll Area */}
       <Box
         sx={{
-          flex: 1,
+          flex: '1 1 auto',
           minHeight: 0,
+          maxHeight: 'calc(100vh - 140px)',
           py: 1,
           overflowY: 'auto',
           overflowX: 'hidden',
           overscrollBehavior: 'contain',
           WebkitOverflowScrolling: 'touch',
           '&::-webkit-scrollbar': {
-            width: '5px',
+            width: '6px',
           },
           '&::-webkit-scrollbar-track': {
-            background: 'transparent',
+            background: 'rgba(0, 0, 0, 0.04)',
+            borderRadius: '3px',
           },
           '&::-webkit-scrollbar-thumb': {
-            background: alpha(theme.palette.text.secondary, 0.2),
+            background: '#94A3B8',
             borderRadius: '4px',
           },
           '&::-webkit-scrollbar-thumb:hover': {
-            background: alpha(theme.palette.text.secondary, 0.4),
+            background: '#64748B',
           },
           scrollbarWidth: 'thin',
-          scrollbarColor: `${alpha(theme.palette.text.secondary, 0.2)} transparent`,
+          scrollbarColor: '#94A3B8 rgba(0, 0, 0, 0.04)',
         }}
       >
-        <List disablePadding sx={{ px: 0.5 }}>
+        <List disablePadding sx={{ px: 0.5, pb: 4 }}>
           {filteredNavItems.map((item) => {
             const isActive = locationPath === item.path || locationPath.startsWith(item.path + '/');
             return (
@@ -363,8 +365,9 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ onToggleTheme, isDark }) => {
             width: drawerWidth,
             boxSizing: 'border-box',
             transition: 'width 0.25s ease',
-            height: '100%',
-            overflow: 'hidden',
+            height: '100vh',
+            overflowY: 'auto',
+            overflowX: 'hidden',
           },
         }}
       >
@@ -389,8 +392,9 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ onToggleTheme, isDark }) => {
           '& .MuiDrawer-paper': {
             width: DRAWER_WIDTH,
             boxSizing: 'border-box',
-            height: '100%',
-            overflow: 'hidden',
+            height: '100vh',
+            overflowY: 'auto',
+            overflowX: 'hidden',
           },
         }}
       >

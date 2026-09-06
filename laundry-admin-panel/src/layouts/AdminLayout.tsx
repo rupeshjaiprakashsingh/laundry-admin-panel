@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Box, Drawer, AppBar, Toolbar, Typography, IconButton,
   List, ListItemButton, ListItemIcon, ListItemText, Avatar,
-  Tooltip, useTheme, alpha, Divider, Chip, Badge,
+  Tooltip, useTheme, alpha, Divider, Chip, Badge, CircularProgress,
 } from '@mui/material';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
+import { useIsFetching, useQueryClient } from '@tanstack/react-query';
+import RefreshIcon from '@mui/icons-material/Refresh';
 
 // Icons
 import DashboardIcon from '@mui/icons-material/Dashboard';
@@ -73,14 +75,271 @@ interface AdminLayoutProps {
   isDark: boolean;
 }
 
+// ── Live Sync Status Pill (Isolated to prevent parent re-renders every 1s) ────
+const LiveSyncPill: React.FC<{ isFetchingCount: number }> = ({ isFetchingCount }) => {
+  const [secondsAgo, setSecondsAgo] = useState(0);
+
+  useEffect(() => {
+    if (isFetchingCount === 0) {
+      setSecondsAgo(0);
+    }
+  }, [isFetchingCount]);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setSecondsAgo((prev) => prev + 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <Tooltip title={`Auto-syncing every 5s. ${secondsAgo < 5 ? 'Just updated' : `Last updated ${secondsAgo}s ago`}`}>
+      <Chip
+        size="small"
+        icon={
+          <Box
+            sx={{
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              bgcolor: isFetchingCount > 0 ? '#F59E0B' : '#10B981',
+              boxShadow: isFetchingCount > 0 ? '0 0 8px #F59E0B' : '0 0 8px #10B981',
+              animation: isFetchingCount > 0 ? 'pulse 1s infinite' : 'none',
+              '@keyframes pulse': {
+                '0%': { transform: 'scale(0.8)', opacity: 0.7 },
+                '50%': { transform: 'scale(1.2)', opacity: 1 },
+                '100%': { transform: 'scale(0.8)', opacity: 0.7 },
+              },
+              ml: '6px !important',
+            }}
+          />
+        }
+        label={
+          isFetchingCount > 0
+            ? 'Syncing...'
+            : secondsAgo < 5
+            ? 'Live Sync'
+            : `Sync (${secondsAgo}s)`
+        }
+        sx={{
+          fontWeight: 700,
+          fontSize: 11,
+          height: 26,
+          bgcolor: (t) => alpha(isFetchingCount > 0 ? '#F59E0B' : '#10B981', 0.12),
+          color: isFetchingCount > 0 ? '#D97706' : '#059669',
+          border: '1px solid',
+          borderColor: (t) => alpha(isFetchingCount > 0 ? '#F59E0B' : '#10B981', 0.3),
+          display: { xs: 'none', sm: 'inline-flex' },
+        }}
+      />
+    </Tooltip>
+  );
+};
+
+// ── Drawer Content (Stable component defined outside AdminLayout) ─────────────
+interface DrawerContentProps {
+  collapsed: boolean;
+  filteredNavItems: NavItem[];
+  locationPath: string;
+  user: any;
+  onNavigate: (path: string) => void;
+  onLogout: () => void;
+}
+
+const DrawerContent: React.FC<DrawerContentProps> = ({
+  collapsed,
+  filteredNavItems,
+  locationPath,
+  user,
+  onNavigate,
+  onLogout,
+}) => {
+  const theme = useTheme();
+
+  return (
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      {/* Logo Header */}
+      <Box
+        sx={{
+          px: collapsed ? 1.5 : 2.5,
+          py: 2,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1.5,
+          borderBottom: `1px solid ${alpha(theme.palette.divider, 0.5)}`,
+          flexShrink: 0,
+        }}
+      >
+        <Box
+          sx={{
+            width: 38,
+            height: 38,
+            borderRadius: 2,
+            flexShrink: 0,
+            background: 'linear-gradient(135deg, #6366F1 0%, #0EA5E9 100%)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 2px 8px rgba(99, 102, 241, 0.25)',
+          }}
+        >
+          <WaterDropIcon sx={{ color: '#fff', fontSize: 22 }} />
+        </Box>
+        {!collapsed && (
+          <Box sx={{ minWidth: 0, flex: 1 }}>
+            <Typography sx={{ fontWeight: 800, fontSize: 16, lineHeight: 1.2 }} noWrap>
+              Grivana
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1 }} noWrap>
+              Admin Panel
+            </Typography>
+          </Box>
+        )}
+      </Box>
+
+      {/* Nav Items Scroll Area */}
+      <Box
+        sx={{
+          flex: '1 1 auto',
+          minHeight: 0,
+          maxHeight: 'calc(100vh - 140px)',
+          py: 1,
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          overscrollBehavior: 'contain',
+          WebkitOverflowScrolling: 'touch',
+          '&::-webkit-scrollbar': {
+            width: '6px',
+          },
+          '&::-webkit-scrollbar-track': {
+            background: 'rgba(0, 0, 0, 0.04)',
+            borderRadius: '3px',
+          },
+          '&::-webkit-scrollbar-thumb': {
+            background: '#94A3B8',
+            borderRadius: '4px',
+          },
+          '&::-webkit-scrollbar-thumb:hover': {
+            background: '#64748B',
+          },
+          scrollbarWidth: 'thin',
+          scrollbarColor: '#94A3B8 rgba(0, 0, 0, 0.04)',
+        }}
+      >
+        <List disablePadding sx={{ px: 0.5, pb: 4 }}>
+          {filteredNavItems.map((item) => {
+            const isActive = locationPath === item.path || locationPath.startsWith(item.path + '/');
+            return (
+              <Tooltip key={item.path} title={collapsed ? item.label : ''} placement="right">
+                <ListItemButton
+                  onClick={() => onNavigate(item.path)}
+                  sx={{
+                    mx: 0.5,
+                    mb: 0.35,
+                    borderRadius: 2,
+                    minHeight: 40,
+                    px: collapsed ? 1 : 1.75,
+                    py: 0.6,
+                    bgcolor: isActive ? alpha(theme.palette.primary.main, 0.12) : 'transparent',
+                    color: isActive ? theme.palette.primary.main : theme.palette.text.secondary,
+                    '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.08) },
+                    transition: 'all 0.15s ease',
+                    justifyContent: collapsed ? 'center' : 'flex-start',
+                  }}
+                >
+                  <ListItemIcon
+                    sx={{
+                      minWidth: collapsed ? 0 : 34,
+                      color: isActive ? theme.palette.primary.main : theme.palette.text.secondary,
+                    }}
+                  >
+                    {item.badge ? (
+                      <Badge badgeContent={item.badge} color="error">{item.icon}</Badge>
+                    ) : item.icon}
+                  </ListItemIcon>
+                  {!collapsed && (
+                    <ListItemText disableTypography>
+                      <Typography sx={{ fontWeight: isActive ? 700 : 500, fontSize: '0.84rem', color: 'inherit' }} noWrap>
+                        {item.label}
+                      </Typography>
+                    </ListItemText>
+                  )}
+                  {isActive && !collapsed && (
+                    <Box sx={{ width: 5, height: 5, borderRadius: '50%', bgcolor: 'primary.main', flexShrink: 0, ml: 1 }} />
+                  )}
+                </ListItemButton>
+              </Tooltip>
+            );
+          })}
+        </List>
+      </Box>
+
+      <Divider sx={{ opacity: 0.4, flexShrink: 0 }} />
+
+      {/* User Info Footer */}
+      <Box sx={{ p: collapsed ? 1 : 1.5, flexShrink: 0 }}>
+        {!collapsed ? (
+          <Box
+            sx={{
+              p: 1.25,
+              borderRadius: 2,
+              bgcolor: alpha(theme.palette.primary.main, 0.06),
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1.25,
+            }}
+          >
+            <Avatar sx={{ width: 34, height: 34, bgcolor: roleColors[user?.role ?? ''] ?? '#6366F1', fontSize: 13, fontWeight: 700 }}>
+              {user?.fullName?.charAt(0) || 'A'}
+            </Avatar>
+            <Box sx={{ overflow: 'hidden', flex: 1, minWidth: 0 }}>
+              <Typography variant="body2" sx={{ fontWeight: 700, fontSize: '0.82rem' }} noWrap>
+                {user?.fullName || 'Admin User'}
+              </Typography>
+              <Chip
+                label={user?.role || 'Admin'}
+                size="small"
+                sx={{
+                  height: 18,
+                  fontSize: '0.65rem',
+                  fontWeight: 700,
+                  bgcolor: alpha(roleColors[user?.role ?? ''] ?? '#6366F1', 0.15),
+                  color: roleColors[user?.role ?? ''] ?? '#6366F1',
+                }}
+              />
+            </Box>
+            <Tooltip title="Logout">
+              <IconButton size="small" onClick={onLogout} sx={{ color: 'text.secondary' }}>
+                <LogoutIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        ) : (
+          <Tooltip title="Logout" placement="right">
+            <IconButton onClick={onLogout} sx={{ width: '100%', color: 'text.secondary' }}>
+              <LogoutIcon />
+            </IconButton>
+          </Tooltip>
+        )}
+      </Box>
+    </Box>
+  );
+};
+
 const AdminLayout: React.FC<AdminLayoutProps> = ({ onToggleTheme, isDark }) => {
   const theme = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const dispatch = useDispatch();
   const { user } = useAuth();
+  const qc = useQueryClient();
+  const isFetchingCount = useIsFetching();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  const handleRefreshAll = useCallback(() => {
+    qc.invalidateQueries();
+  }, [qc]);
 
   const drawerWidth = collapsed ? DRAWER_COLLAPSED : DRAWER_WIDTH;
 
@@ -93,124 +352,6 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ onToggleTheme, isDark }) => {
     (item) => !item.roles || (user && item.roles.includes(user.role))
   );
 
-  const DrawerContent = () => (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      {/* Logo */}
-      <Box
-        sx={{
-          px: collapsed ? 1.5 : 3, py: 2.5,
-          display: 'flex', alignItems: 'center', gap: 1.5,
-          borderBottom: `1px solid ${alpha(theme.palette.divider, 0.5)}`,
-        }}
-      >
-        <Box
-          sx={{
-            width: 38, height: 38, borderRadius: 2, flexShrink: 0,
-            background: 'linear-gradient(135deg, #6366F1 0%, #0EA5E9 100%)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}
-        >
-          <WaterDropIcon sx={{ color: '#fff', fontSize: 22 }} />
-        </Box>
-        {!collapsed && (
-          <Box>
-            <Typography sx={{ fontWeight: 800, fontSize: 16, lineHeight: 1 }}>
-              Grivana
-            </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1 }}>
-              Admin Panel
-            </Typography>
-          </Box>
-        )}
-      </Box>
-
-      {/* Nav Items */}
-      <Box sx={{ flex: 1, py: 1.5, overflowY: 'auto', overflowX: 'hidden' }}>
-        <List disablePadding>
-          {filteredNavItems.map((item) => {
-            const isActive = location.pathname.startsWith(item.path);
-            return (
-              <Tooltip key={item.path} title={collapsed ? item.label : ''} placement="right">
-                <ListItemButton
-                  onClick={() => { navigate(item.path); setMobileOpen(false); }}
-                  sx={{
-                    mx: 1, mb: 0.5, borderRadius: 2,
-                    minHeight: 46,
-                    px: collapsed ? 1.5 : 2,
-                    bgcolor: isActive ? alpha(theme.palette.primary.main, 0.12) : 'transparent',
-                    color: isActive ? theme.palette.primary.main : theme.palette.text.secondary,
-                    '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.08) },
-                    transition: 'all 0.2s',
-                    justifyContent: collapsed ? 'center' : 'flex-start',
-                  }}
-                >
-                  <ListItemIcon
-                    sx={{
-                      minWidth: collapsed ? 0 : 38,
-                      color: isActive ? theme.palette.primary.main : theme.palette.text.secondary,
-                    }}
-                  >
-                    {item.badge ? (
-                      <Badge badgeContent={item.badge} color="error">{item.icon}</Badge>
-                    ) : item.icon}
-                  </ListItemIcon>
-                  {!collapsed && (
-                    <ListItemText>
-                      <Typography sx={{ fontWeight: isActive ? 700 : 500, fontSize: '0.875rem', color: 'inherit' }}>
-                        {item.label}
-                      </Typography>
-                    </ListItemText>
-                  )}
-                  {isActive && !collapsed && (
-                    <Box sx={{ width: 4, height: 4, borderRadius: '50%', bgcolor: 'primary.main' }} />
-                  )}
-                </ListItemButton>
-              </Tooltip>
-            );
-          })}
-        </List>
-      </Box>
-
-      <Divider sx={{ opacity: 0.4 }} />
-
-      {/* User Info */}
-      <Box sx={{ p: collapsed ? 1 : 2 }}>
-        {!collapsed ? (
-          <Box
-            sx={{
-              p: 1.5, borderRadius: 2,
-              bgcolor: alpha(theme.palette.primary.main, 0.06),
-              display: 'flex', alignItems: 'center', gap: 1.5,
-            }}
-          >
-            <Avatar sx={{ width: 36, height: 36, bgcolor: roleColors[user?.role ?? ''] ?? '#6366F1', fontSize: 14, fontWeight: 700 }}>
-              {user?.fullName?.charAt(0)}
-            </Avatar>
-            <Box sx={{ overflow: 'hidden', flex: 1 }}>
-              <Typography variant="body2" sx={{ fontWeight: 700 }} noWrap>{user?.fullName}</Typography>
-              <Chip
-                label={user?.role}
-                size="small"
-                sx={{ height: 18, fontSize: '0.65rem', fontWeight: 700, bgcolor: alpha(roleColors[user?.role ?? ''] ?? '#6366F1', 0.15), color: roleColors[user?.role ?? ''] ?? '#6366F1' }}
-              />
-            </Box>
-            <Tooltip title="Logout">
-              <IconButton size="small" onClick={handleLogout} sx={{ color: 'text.secondary' }}>
-                <LogoutIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          </Box>
-        ) : (
-          <Tooltip title="Logout" placement="right">
-            <IconButton onClick={handleLogout} sx={{ width: '100%', color: 'text.secondary' }}>
-              <LogoutIcon />
-            </IconButton>
-          </Tooltip>
-        )}
-      </Box>
-    </Box>
-  );
-
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'background.default' }}>
       {/* Desktop Drawer */}
@@ -220,10 +361,24 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ onToggleTheme, isDark }) => {
           display: { xs: 'none', md: 'block' },
           width: drawerWidth,
           flexShrink: 0,
-          '& .MuiDrawer-paper': { width: drawerWidth, boxSizing: 'border-box', transition: 'width 0.25s ease' },
+          '& .MuiDrawer-paper': {
+            width: drawerWidth,
+            boxSizing: 'border-box',
+            transition: 'width 0.25s ease',
+            height: '100vh',
+            overflowY: 'auto',
+            overflowX: 'hidden',
+          },
         }}
       >
-        <DrawerContent />
+        <DrawerContent
+          collapsed={collapsed}
+          filteredNavItems={filteredNavItems}
+          locationPath={location.pathname}
+          user={user}
+          onNavigate={(path) => { navigate(path); setMobileOpen(false); }}
+          onLogout={handleLogout}
+        />
       </Drawer>
 
       {/* Mobile Drawer */}
@@ -234,10 +389,23 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ onToggleTheme, isDark }) => {
         ModalProps={{ keepMounted: true }}
         sx={{
           display: { xs: 'block', md: 'none' },
-          '& .MuiDrawer-paper': { width: DRAWER_WIDTH },
+          '& .MuiDrawer-paper': {
+            width: DRAWER_WIDTH,
+            boxSizing: 'border-box',
+            height: '100vh',
+            overflowY: 'auto',
+            overflowX: 'hidden',
+          },
         }}
       >
-        <DrawerContent />
+        <DrawerContent
+          collapsed={false}
+          filteredNavItems={filteredNavItems}
+          locationPath={location.pathname}
+          user={user}
+          onNavigate={(path) => { navigate(path); setMobileOpen(false); }}
+          onLogout={handleLogout}
+        />
       </Drawer>
 
       {/* Main Content */}
@@ -254,6 +422,33 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ onToggleTheme, isDark }) => {
             </IconButton>
 
             <Box sx={{ flex: 1 }} />
+
+            {/* Live Auto-Refresh Status Pill */}
+            <LiveSyncPill isFetchingCount={isFetchingCount} />
+
+            {/* Manual Refresh Button */}
+            <Tooltip title="Refresh all data now">
+              <IconButton
+                onClick={handleRefreshAll}
+                size="small"
+                sx={{
+                  color: 'text.secondary',
+                  '&:hover': { color: 'primary.main', bgcolor: alpha(theme.palette.primary.main, 0.08) },
+                }}
+              >
+                {isFetchingCount > 0 ? (
+                  <CircularProgress size={18} color="inherit" />
+                ) : (
+                  <RefreshIcon
+                    fontSize="small"
+                    sx={{
+                      transition: 'transform 0.3s',
+                      '&:hover': { transform: 'rotate(180deg)' },
+                    }}
+                  />
+                )}
+              </IconButton>
+            </Tooltip>
 
             <Tooltip title={isDark ? 'Light Mode' : 'Dark Mode'}>
               <IconButton onClick={onToggleTheme} sx={{ color: 'text.secondary' }}>
