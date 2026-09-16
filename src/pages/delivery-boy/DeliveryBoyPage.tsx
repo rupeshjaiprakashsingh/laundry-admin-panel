@@ -1994,7 +1994,7 @@ const DeliveryBoyPage: React.FC = () => {
 
   const deliveries = useMemo(() => {
     const filtered = (rawDeliveries as any[]).filter(d =>
-      d.order && ['Laundry', 'Out For Delivery', 'Delivered'].includes(d.order.orderStatus)
+      d.order && ['Laundry', 'Processing', 'Washing', 'Dry Cleaning', 'Ironing', 'Ready For Delivery', 'Out For Delivery', 'Delivered'].includes(d.order.orderStatus)
     );
     const latestMap = new Map<number, any>();
     for (const d of filtered) {
@@ -2003,7 +2003,12 @@ const DeliveryBoyPage: React.FC = () => {
         latestMap.set(d.orderId, d);
       }
     }
-    return Array.from(latestMap.values());
+    return Array.from(latestMap.values()).sort((a, b) => {
+      const aActive = a.deliveryStatus === 'Pending' || a.deliveryStatus === 'OutForDelivery' ? 0 : 1;
+      const bActive = b.deliveryStatus === 'Pending' || b.deliveryStatus === 'OutForDelivery' ? 0 : 1;
+      if (aActive !== bActive) return aActive - bActive;
+      return b.id - a.id;
+    });
   }, [rawDeliveries]);
 
   // Filtered lists
@@ -2406,16 +2411,41 @@ const DeliveryBoyPage: React.FC = () => {
                 title={searchQuery ? "No Matching Deliveries" : "No Deliveries Assigned"}
                 subtitle={searchQuery ? "Try refining your search terms." : "No delivery tasks yet. You'll see them here once assigned by admin."}
               />
-            ) : (
-              filteredDeliveries.map((delivery) => (
-                <DeliveryCard
-                  key={delivery.id}
-                  delivery={delivery}
-                  onAction={(id, status, remarks, otp, paymentMode) => deliveryMutation.mutate({ id, status, remarks, otp, paymentMode })}
-                  isLoading={deliveryMutation.isPending}
-                />
-              ))
-            )}
+            ) : (() => {
+              const activeDeliveries = filteredDeliveries.filter(d => d.deliveryStatus === 'Pending' || d.deliveryStatus === 'OutForDelivery');
+              const doneDeliveries = filteredDeliveries.filter(d => d.deliveryStatus === 'Delivered' || d.deliveryStatus === 'Failed');
+              return (
+                <>
+                  {activeDeliveries.map((delivery) => (
+                    <DeliveryCard
+                      key={delivery.id}
+                      delivery={delivery}
+                      onAction={(id, status, remarks, otp, paymentMode) => deliveryMutation.mutate({ id, status, remarks, otp, paymentMode })}
+                      isLoading={deliveryMutation.isPending}
+                    />
+                  ))}
+                  {doneDeliveries.length > 0 && (
+                    <Box sx={{ mt: 3, mb: 1.5 }}>
+                      <Divider sx={{ mb: 2 }}>
+                        <Chip
+                          label={`Completed Deliveries (${doneDeliveries.length})`}
+                          size="small"
+                          sx={{ fontSize: 11, fontWeight: 800, bgcolor: '#F3F4F6', color: '#6B7280' }}
+                        />
+                      </Divider>
+                      {doneDeliveries.map((delivery) => (
+                        <DeliveryCard
+                          key={delivery.id}
+                          delivery={delivery}
+                          onAction={(id, status, remarks, otp, paymentMode) => deliveryMutation.mutate({ id, status, remarks, otp, paymentMode })}
+                          isLoading={deliveryMutation.isPending}
+                        />
+                      ))}
+                    </Box>
+                  )}
+                </>
+              );
+            })()}
           </>
         )}
 

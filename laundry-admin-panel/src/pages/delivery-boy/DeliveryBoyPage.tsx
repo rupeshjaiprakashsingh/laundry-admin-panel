@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
   Box, Typography, Card, CardContent, Chip, Avatar, IconButton,
   Button, CircularProgress, Snackbar, Alert as MuiAlert,
@@ -35,6 +35,9 @@ import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
 import SearchIcon from '@mui/icons-material/Search';
 import ClearIcon from '@mui/icons-material/Clear';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
+import StorefrontIcon from '@mui/icons-material/Storefront';
 
 import {
   getMyDeliveries,
@@ -82,17 +85,90 @@ function buildAddress(customer: {
   state?: string;
   pincode?: string;
 }): string {
-  return [customer.houseDetails, customer.landmark, customer.address, customer.city, customer.state]
+  return [customer.houseDetails, customer.landmark, customer.address, customer.city, customer.state, customer.pincode]
     .filter(Boolean)
     .join(', ');
 }
 
+interface AddressHolder {
+  addressTitle?: string | null;
+  houseDetails?: string | null;
+  landmark?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  pincode?: string | null;
+}
+
+function resolveDisplayAddress(
+  order?: AddressHolder | null,
+  customer?: AddressHolder | null,
+  fallbackAddress?: string | null
+): { title: string | null; fullAddress: string; pincode?: string | null } {
+  const pin = order?.pincode || customer?.pincode || (fallbackAddress ? fallbackAddress.match(/\b\d{6}\b/)?.[0] : null) || null;
+
+  // 1. Order-specific snapshot address (takes top priority for the order)
+  if (order && (order.houseDetails || order.address || order.city || order.pincode)) {
+    const parts = [
+      order.houseDetails,
+      order.landmark ? `(Landmark: ${order.landmark})` : null,
+      order.address,
+      order.city,
+      order.state,
+      order.pincode,
+    ].filter(Boolean);
+    if (parts.length > 0) {
+      return {
+        title: order.addressTitle || null,
+        fullAddress: parts.join(', '),
+        pincode: pin,
+      };
+    }
+  }
+
+  // 2. Specific fallback string if provided and not generic
+  if (fallbackAddress && fallbackAddress.trim() && fallbackAddress.trim() !== 'Customer Address') {
+    return {
+      title: order?.addressTitle || null,
+      fullAddress: fallbackAddress.trim(),
+      pincode: pin,
+    };
+  }
+
+  // 3. Customer profile fallback
+  if (customer && (customer.houseDetails || customer.address || customer.city || customer.pincode)) {
+    const parts = [
+      customer.houseDetails,
+      customer.landmark ? `(Landmark: ${customer.landmark})` : null,
+      customer.address,
+      customer.city,
+      customer.state,
+      customer.pincode,
+    ].filter(Boolean);
+    if (parts.length > 0) {
+      return {
+        title: customer.addressTitle || null,
+        fullAddress: parts.join(', '),
+        pincode: pin,
+      };
+    }
+  }
+
+  return { title: null, fullAddress: fallbackAddress?.trim() || '', pincode: pin };
+}
+
 function openMaps(address: string) {
-  const encoded = encodeURIComponent(address);
+  if (!address || !address.trim()) {
+    alert('Address not available for navigation.');
+    return;
+  }
+  const encoded = encodeURIComponent(address.trim());
+  // Use Google Maps directions URL — works on Android (opens app), desktop (opens web)
+  // The 'daddr' param is the destination address for navigation
   window.open(
-    `https://www.google.com/maps/dir/?api=1&destination=${encoded}`,
+    `https://www.google.com/maps/dir/?api=1&destination=${encoded}&travelmode=driving`,
     '_blank',
-    'noopener',
+    'noopener,noreferrer',
   );
 }
 
@@ -123,34 +199,77 @@ const PickupCard: React.FC<{
   laundryShops: any[];
   onAction: (id: number, status: string, laundryShopId?: number) => void;
   isLoading: boolean;
-}> = ({ pickup, laundryShops, onAction, isLoading }) => {
+}> = ({ pickup, laundryShops: rawLaundryShops, onAction, isLoading }) => {
   const [expanded, setExpanded] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<{ status: string; label: string } | null>(null);
-  const [selectedShopId, setSelectedShopId] = useState<number | string>('');
+
+  // Normalize laundryShops to guaranteed array
+  const laundryShops = useMemo(() => {
+    const list = Array.isArray(rawLaundryShops)
+      ? rawLaundryShops
+      : (rawLaundryShops as any)?.data || [];
+    return list.filter((s: any) => s && s.isActive !== false);
+  }, [rawLaundryShops]);
+
+  // Pre-select laundry shop if already assigned to this order
+  const assignedShopId = (pickup.order as any)?.laundryShopId || (pickup as any).laundryShopId || pickup.order?.laundryShop?.id || '';
+  const [selectedShopId, setSelectedShopId] = useState<number | string>(assignedShopId);
+  const [shopFilter, setShopFilter] = useState('');
   const [showAddShop, setShowAddShop] = useState(false);
   const [newShopName, setNewShopName] = useState('');
   const [newShopPincode, setNewShopPincode] = useState('');
   const [creatingShop, setCreatingShop] = useState(false);
+  const addShopRef = useRef<HTMLDivElement>(null);
   const qc = useQueryClient();
+
+  useEffect(() => {
+    if (assignedShopId && !selectedShopId) {
+      setSelectedShopId(assignedShopId);
+    }
+  }, [assignedShopId]);
+
+  useEffect(() => {
+    if (showAddShop && addShopRef.current) {
+      setTimeout(() => {
+        addShopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }, 100);
+    }
+  }, [showAddShop]);
 
   const handleCreateShop = async () => {
     if (!newShopName.trim() || !newShopPincode.trim()) return;
     setCreatingShop(true);
     try {
       const randomCode = 'SHOP-' + Math.floor(1000 + Math.random() * 9000);
-      const newShop = await createLaundryShop({
-        shopName: newShopName,
+      const res = await createLaundryShop({
+        shopName: newShopName.trim(),
         shopCode: randomCode,
-        pincode: newShopPincode,
+        pincode: newShopPincode.trim(),
         isActive: true,
       });
-      qc.invalidateQueries({ queryKey: ['laundry-shops'] });
-      setSelectedShopId(newShop.id);
+
+      const newShop = (res as any)?.data || res;
+      const createdId = newShop?.id;
+
+      // Immediately inject into React Query cache so it shows instantly in the dropdown
+      qc.setQueryData(['laundry-shops'], (old: any) => {
+        const currentList = Array.isArray(old) ? old : (old?.data || []);
+        if (newShop && createdId) {
+          return [newShop, ...currentList.filter((s: any) => s.id !== createdId)];
+        }
+        return currentList;
+      });
+      await qc.invalidateQueries({ queryKey: ['laundry-shops'] });
+
+      if (createdId) {
+        setSelectedShopId(createdId);
+      }
       setShowAddShop(false);
       setNewShopName('');
       setNewShopPincode('');
     } catch (err) {
       console.error('Failed to create shop', err);
+      alert('Failed to create laundry shop. Please check details and try again.');
     } finally {
       setCreatingShop(false);
     }
@@ -158,7 +277,45 @@ const PickupCard: React.FC<{
 
   const statusCfg = pickupStatusConfig[pickup.status] ?? pickupStatusConfig.Pending;
   const isDone = pickup.status === 'Completed' || pickup.status === 'Cancelled';
-  const address = buildAddress(pickup.customer) || pickup.pickupAddress;
+  const addrInfo = resolveDisplayAddress(pickup.order, pickup.customer, pickup.pickupAddress);
+  const address = addrInfo.fullAddress;
+  const customerPincode = addrInfo.pincode || pickup.customer?.pincode || (pickup.order as any)?.pincode || '';
+  const customerPin = String(customerPincode || '').trim();
+
+  // Find currently selected shop
+  const selectedShop = useMemo(() => {
+    if (!selectedShopId) return null;
+    return laundryShops.find((s: any) => String(s.id) === String(selectedShopId)) || null;
+  }, [laundryShops, selectedShopId]);
+
+  // Filtered & sorted laundry shops for inline selector
+  const filteredShops = useMemo(() => {
+    let list = [...laundryShops];
+    if (shopFilter.trim()) {
+      const q = shopFilter.toLowerCase().trim();
+      list = list.filter((shop: any) => {
+        const name = (shop.shopName || '').toLowerCase();
+        const pin = String(shop.pincode || '');
+        const addr = (shop.address || '').toLowerCase();
+        const city = (shop.city || '').toLowerCase();
+        return name.includes(q) || pin.includes(q) || addr.includes(q) || city.includes(q);
+      });
+    }
+
+    return list.sort((a: any, b: any) => {
+      const aSelected = String(a.id) === String(selectedShopId);
+      const bSelected = String(b.id) === String(selectedShopId);
+      if (aSelected && !bSelected) return -1;
+      if (!aSelected && bSelected) return 1;
+
+      const aNear = Boolean(customerPin && a.pincode && String(a.pincode).trim() === customerPin);
+      const bNear = Boolean(customerPin && b.pincode && String(b.pincode).trim() === customerPin);
+      if (aNear && !bNear) return -1;
+      if (!aNear && bNear) return 1;
+
+      return (a.shopName || '').localeCompare(b.shopName || '');
+    });
+  }, [laundryShops, shopFilter, customerPin, selectedShopId]);
 
   return (
     <>
@@ -187,25 +344,37 @@ const PickupCard: React.FC<{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             }}
           >
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
               <Box
                 sx={{
-                  width: 36, height: 36, borderRadius: 2,
-                  background: 'linear-gradient(135deg, #6366F1, #4F46E5)',
+                  width: 40, height: 40, borderRadius: 2,
+                  background: isDone
+                    ? 'linear-gradient(135deg, #9CA3AF, #6B7280)'
+                    : 'linear-gradient(135deg, #6366F1, #4F46E5)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  flexShrink: 0,
+                  boxShadow: isDone ? 'none' : '0 2px 6px rgba(99, 102, 241, 0.3)',
                 }}
               >
-                <LocalShippingIcon sx={{ color: '#fff', fontSize: 18 }} />
+                <LocalShippingIcon sx={{ color: '#fff', fontSize: 20 }} />
               </Box>
-              <Box>
-                <Typography sx={{ fontWeight: 800, fontSize: 13, color: '#1E1B4B' }}>
-                  Pickup #{pickup.id}
+              <Box sx={{ minWidth: 0 }}>
+                {/* 1. ORDER NUMBER (Displayed directly above Pickup #) */}
+                <Typography sx={{ fontWeight: 900, fontSize: 15, color: isDone ? '#374151' : '#1E1B4B', lineHeight: 1.2, mb: 0.25 }}>
+                  Order #{pickup.order?.orderNumber || (pickup as any).orderNumber || `ORD-${String(pickup.id).padStart(5, '0')}`}
                 </Typography>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <AccessTimeIcon sx={{ fontSize: 11, color: '#6B7280' }} />
-                  <Typography sx={{ fontSize: 11, color: '#6B7280' }}>
-                    {formatPickupDate(pickup.pickupDate, pickup.pickupTime)}
+                {/* 2. PICKUP # and TIME SLOT */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
+                  <Typography sx={{ fontSize: 12, color: isDone ? '#4B5563' : '#4F46E5', fontWeight: 800 }}>
+                    Pickup #{pickup.id}
                   </Typography>
+                  <Typography sx={{ fontSize: 11, color: '#9CA3AF' }}>•</Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.35 }}>
+                    <AccessTimeIcon sx={{ fontSize: 12, color: '#6B7280' }} />
+                    <Typography sx={{ fontSize: 11, color: '#4B5563', fontWeight: 600 }}>
+                      {formatPickupDate(pickup.pickupDate, pickup.pickupTime)}
+                    </Typography>
+                  </Box>
                 </Box>
               </Box>
             </Box>
@@ -222,20 +391,93 @@ const PickupCard: React.FC<{
 
           {/* Customer Info */}
           <Box sx={{ px: 2, pt: 1.5, pb: 0.5 }}>
+            {/* Prominent Order No Badge */}
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                px: 1.5,
+                py: 1,
+                mb: 1.5,
+                bgcolor: '#EEF2FF',
+                borderRadius: 2,
+                border: '1.5px solid #6366F1',
+                boxShadow: '0 1px 3px rgba(99, 102, 241, 0.1)',
+              }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                <Typography sx={{ fontSize: 12, fontWeight: 800, color: '#312E81' }}>
+                  📦 Order No:
+                </Typography>
+                <Typography sx={{ fontSize: 14, fontWeight: 900, color: '#4F46E5', letterSpacing: '0.5px' }}>
+                  {pickup.order?.orderNumber || (pickup as any).orderNumber || `ORD-${String(pickup.id).padStart(5, '0')}`}
+                </Typography>
+              </Box>
+              <Chip
+                label={pickup.order?.orderNumber ? 'Linked Order' : `Pickup #${pickup.id}`}
+                size="small"
+                sx={{ height: 20, fontSize: 10, fontWeight: 800, bgcolor: '#E0E7FF', color: '#4338CA' }}
+              />
+            </Box>
+
             <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 1 }}>
               <Box sx={{ flex: 1 }}>
                 <Typography sx={{ fontWeight: 800, fontSize: 16, color: '#111827', mb: 0.25 }}>
                   {pickup.customer.firstName} {pickup.customer.lastName}
                 </Typography>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <LocationOnIcon sx={{ fontSize: 13, color: '#6366F1' }} />
-                  <Typography sx={{ fontSize: 12, color: '#374151', lineHeight: 1.4 }}>
-                    {address}
-                    {pickup.customer.pincode && ` - ${pickup.customer.pincode}`}
-                  </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5 }}>
+                  <LocationOnIcon sx={{ fontSize: 14, color: '#6366F1', mt: 0.2, flexShrink: 0 }} />
+                  <Box sx={{ flex: 1 }}>
+                    {addrInfo.title && (
+                      <Chip
+                        icon={<HomeIcon sx={{ fontSize: '11px !important' }} />}
+                        label={addrInfo.title}
+                        size="small"
+                        sx={{
+                          height: 18,
+                          fontSize: 10,
+                          fontWeight: 800,
+                          mr: 0.75,
+                          mb: 0.25,
+                          bgcolor: addrInfo.title.toLowerCase() === 'work' ? '#EEF2FF' : '#DCFCE7',
+                          color: addrInfo.title.toLowerCase() === 'work' ? '#4338CA' : '#15803D',
+                          border: addrInfo.title.toLowerCase() === 'work' ? '1px solid #C7D2FE' : '1px solid #BBF7D0',
+                        }}
+                      />
+                    )}
+                    <Typography component="span" sx={{ fontSize: 12, color: '#374151', lineHeight: 1.4 }}>
+                      {address || 'Address not specified'}
+                    </Typography>
+                  </Box>
                 </Box>
               </Box>
             </Box>
+
+            {/* Payment Details */}
+            {pickup.order && (
+              <Box
+                sx={{
+                  display: 'flex', alignItems: 'center', gap: 1, mt: 1, mb: 1,
+                  px: 1.5, py: 0.85,
+                  bgcolor: pickup.order.paymentStatus === 'Paid' ? '#ECFDF5' : '#FFFBEB',
+                  borderRadius: 2,
+                  border: pickup.order.paymentStatus === 'Paid' ? '1px solid #A7F3D0' : '1px solid #FDE68A',
+                }}
+              >
+                <Box
+                  sx={{
+                    width: 8, height: 8, borderRadius: '50%',
+                    bgcolor: pickup.order.paymentStatus === 'Paid' ? '#10B981' : '#F59E0B',
+                  }}
+                />
+                <Typography sx={{ fontSize: 12, fontWeight: 800, color: pickup.order.paymentStatus === 'Paid' ? '#047857' : '#B45309' }}>
+                  {pickup.order.paymentStatus === 'Paid'
+                    ? 'Payment: Paid'
+                    : `Payment: ₹${pickup.order.netAmount ? pickup.order.netAmount.toFixed(2) : '0.00'}`}
+                </Typography>
+              </Box>
+            )}
 
             {/* Drop Off Laundry Shop Info */}
             {pickup.order?.laundryShop && (
@@ -352,7 +594,13 @@ const PickupCard: React.FC<{
                   fullWidth variant="contained" size="medium"
                   startIcon={isLoading ? <CircularProgress size={14} color="inherit" /> : <CheckCircleOutlineIcon />}
                   disabled={isLoading || pickup.status === 'Completed'}
-                  onClick={() => setConfirmDialog({ status: 'Completed', label: 'Mark as Picked Up' })}
+                  onClick={() => {
+                    const existingShopId = (pickup.order as any)?.laundryShopId || (pickup as any).laundryShopId || pickup.order?.laundryShop?.id || '';
+                    if (existingShopId) {
+                      setSelectedShopId(existingShopId);
+                    }
+                    setConfirmDialog({ status: 'Completed', label: 'Mark as Picked Up' });
+                  }}
                   sx={{
                     borderRadius: 2, fontWeight: 700, textTransform: 'none', fontSize: 13,
                     background: 'linear-gradient(135deg, #10B981, #059669)',
@@ -394,89 +642,588 @@ const PickupCard: React.FC<{
         </CardContent>
       </Card>
 
-      {/* Confirm Dialog */}
-      <Dialog open={!!confirmDialog} onClose={() => setConfirmDialog(null)} maxWidth="xs" fullWidth>
-        <DialogTitle sx={{ fontWeight: 800, pb: 0.5 }}>
+        {/* Confirm Dialog */}
+      <Dialog
+        open={!!confirmDialog}
+        onClose={() => {
+          setConfirmDialog(null);
+          setShowAddShop(false);
+          setNewShopName('');
+          setNewShopPincode('');
+          setShopFilter('');
+        }}
+        maxWidth="xs"
+        fullWidth
+        scroll="paper"
+        slotProps={{
+          paper: {
+            sx: {
+              borderRadius: 3,
+              bgcolor: '#FFFFFF !important',
+              color: '#0F172A !important',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.1)',
+              m: { xs: 1.5, sm: 2 },
+              maxHeight: 'calc(100% - 32px)',
+            },
+          },
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: 800, pb: 1, color: '#0F172A !important', fontSize: { xs: 16, sm: 18 } }}>
           {confirmDialog?.label}
         </DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary">
+        <DialogContent
+          dividers
+          sx={{
+            color: '#0F172A !important',
+            maxHeight: 'calc(75vh - 100px)',
+            overflowY: 'auto',
+            overscrollBehavior: 'contain',
+            WebkitOverflowScrolling: 'touch',
+            px: { xs: 2, sm: 2.5 },
+            py: 2,
+            '&::-webkit-scrollbar': {
+              width: '6px',
+            },
+            '&::-webkit-scrollbar-track': {
+              background: '#F1F5F9',
+              borderRadius: '3px',
+            },
+            '&::-webkit-scrollbar-thumb': {
+              background: '#94A3B8',
+              borderRadius: '3px',
+            },
+            '&::-webkit-scrollbar-thumb:hover': {
+              background: '#64748B',
+            },
+          }}
+        >
+          <Typography variant="body2" sx={{ color: '#475569 !important', mb: 1.5, fontSize: 13.5, lineHeight: 1.5 }}>
             {confirmDialog?.status === 'Completed'
-              ? `Confirm that you have collected the clothes from ${pickup.customer.firstName} ${pickup.customer.lastName}?`
-              : `Are you sure you want to cancel pickup #${pickup.id}?`}
+              ? `Confirm that you have collected the clothes for Order #${pickup.order?.orderNumber || (pickup as any).orderNumber || `ORD-${String(pickup.id).padStart(5, '0')}`} from ${pickup.customer?.firstName || ''} ${pickup.customer?.lastName || ''}?`
+              : `Are you sure you want to cancel pickup #${pickup.id} (Order #${pickup.order?.orderNumber || (pickup as any).orderNumber || `ORD-${String(pickup.id).padStart(5, '0')}`})?`}
           </Typography>
 
           {confirmDialog?.status === 'Completed' && (
-            <Box sx={{ mt: 2 }}>
-              <Typography variant="body2" sx={{ fontWeight: 700, mb: 1, color: '#374151' }}>
-                Select Laundry Shop to drop clothes:
-              </Typography>
-              <Autocomplete
-                size="small"
-                options={laundryShops}
-                getOptionLabel={(shop) => `${shop.shopName} (${shop.pincode})`}
-                value={laundryShops.find(s => s.id === Number(selectedShopId)) || null}
-                onChange={(_, newValue) => {
-                  setSelectedShopId(newValue ? newValue.id : '');
-                }}
-                renderInput={(params) => (
-                  <TextField {...params} label="Search & Select Laundry Shop" />
+            <Box sx={{ mt: 1.5 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                <Typography variant="body2" sx={{ fontWeight: 800, color: '#1E293B !important', fontSize: 13 }}>
+                  Select Laundry Shop to drop clothes:
+                </Typography>
+                {selectedShop && (
+                  <Chip
+                    label="Shop Selected ✓"
+                    size="small"
+                    sx={{
+                      height: 20,
+                      fontSize: 10,
+                      fontWeight: 800,
+                      bgcolor: '#DCFCE7 !important',
+                      color: '#166534 !important',
+                      border: '1px solid #BBF7D0',
+                    }}
+                  />
                 )}
-                sx={{ mb: 1.5 }}
+              </Box>
+
+              {/* Selected Shop Active Banner */}
+              {selectedShop && (
+                <Box
+                  sx={{
+                    p: 1.25,
+                    mb: 1.5,
+                    bgcolor: '#EEF2FF',
+                    borderRadius: 2,
+                    border: '1.5px solid #6366F1',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+                    <StorefrontIcon sx={{ color: '#4F46E5', fontSize: 20, flexShrink: 0 }} />
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography sx={{ fontWeight: 800, fontSize: 13, color: '#1E1B4B' }} noWrap>
+                        {selectedShop.shopName}
+                      </Typography>
+                      <Typography sx={{ fontSize: 11, color: '#4338CA', fontWeight: 600 }}>
+                        {selectedShop.pincode ? `PIN: ${selectedShop.pincode}` : ''}
+                        {selectedShop.address ? ` • ${selectedShop.address}` : ''}
+                      </Typography>
+                    </Box>
+                  </Box>
+                  <Button
+                    size="small"
+                    variant="text"
+                    onClick={() => setSelectedShopId('')}
+                    sx={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: '#6366F1 !important',
+                      p: 0.5,
+                      minWidth: 0,
+                      textTransform: 'none',
+                      '&:hover': { bgcolor: 'transparent', textDecoration: 'underline' },
+                    }}
+                  >
+                    Change
+                  </Button>
+                </Box>
+              )}
+
+              {/* Instant Search Bar */}
+              <TextField
+                fullWidth
+                size="small"
+                placeholder="🔍 Search shop name or pincode..."
+                value={shopFilter}
+                onChange={(e) => setShopFilter(e.target.value)}
+                slotProps={{
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon sx={{ color: '#6366F1', fontSize: 18 }} />
+                      </InputAdornment>
+                    ),
+                    endAdornment: shopFilter ? (
+                      <InputAdornment position="end">
+                        <IconButton size="small" onClick={() => setShopFilter('')} sx={{ p: 0.25 }}>
+                          <ClearIcon sx={{ fontSize: 14 }} />
+                        </IconButton>
+                      </InputAdornment>
+                    ) : null,
+                  },
+                }}
+                sx={{
+                  mb: 1.5,
+                  bgcolor: '#FFFFFF !important',
+                  borderRadius: 2,
+                  '& .MuiInputBase-root': {
+                    bgcolor: '#F8FAFC !important',
+                    borderRadius: 2,
+                    height: 40,
+                  },
+                  '& .MuiInputBase-input': {
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: '#0F172A !important',
+                    WebkitTextFillColor: '#0F172A !important',
+                    py: 1,
+                  },
+                  '& .MuiOutlinedInput-notchedOutline': {
+                    borderColor: '#CBD5E1 !important',
+                  },
+                  '&:hover .MuiOutlinedInput-notchedOutline': {
+                    borderColor: '#6366F1 !important',
+                  },
+                  '& .Mui-focused .MuiOutlinedInput-notchedOutline': {
+                    borderColor: '#4F46E5 !important',
+                    borderWidth: '2px !important',
+                  },
+                }}
               />
 
-              <Box sx={{ textAlign: 'right' }}>
+              {/* Inline Scrollable Shop Selection List (NO floating popovers) */}
+              <Box
+                sx={{
+                  maxHeight: 210,
+                  overflowY: 'auto',
+                  pr: 0.5,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 1,
+                  overscrollBehavior: 'contain',
+                  WebkitOverflowScrolling: 'touch',
+                  '&::-webkit-scrollbar': { width: '5px' },
+                  '&::-webkit-scrollbar-track': { background: '#F1F5F9', borderRadius: '3px' },
+                  '&::-webkit-scrollbar-thumb': { background: '#CBD5E1', borderRadius: '3px' },
+                  '&::-webkit-scrollbar-thumb:hover': { background: '#94A3B8' },
+                }}
+              >
+                {filteredShops.length === 0 ? (
+                  <Box
+                    sx={{
+                      p: 2,
+                      textAlign: 'center',
+                      bgcolor: '#F8FAFC',
+                      borderRadius: 2,
+                      border: '1px dashed #CBD5E1',
+                    }}
+                  >
+                    <Typography sx={{ fontSize: 12, fontWeight: 700, color: '#64748B !important', mb: 1 }}>
+                      {shopFilter ? `No shops found matching "${shopFilter}"` : 'No active laundry shops found.'}
+                    </Typography>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() => {
+                        if (shopFilter.trim()) setNewShopName(shopFilter.trim());
+                        if (customerPin) setNewShopPincode(customerPin);
+                        setShowAddShop(true);
+                      }}
+                      sx={{
+                        fontSize: 11,
+                        fontWeight: 800,
+                        textTransform: 'none',
+                        borderRadius: 1.5,
+                        borderColor: '#6366F1',
+                        color: '#4F46E5',
+                      }}
+                    >
+                      + Add {shopFilter ? `"${shopFilter.trim()}"` : 'New Shop'}
+                    </Button>
+                  </Box>
+                ) : (
+                  filteredShops.map((shop: any) => {
+                    const isSelected = String(shop.id) === String(selectedShopId);
+                    const isNear = Boolean(customerPin && shop.pincode && String(shop.pincode).trim() === customerPin);
+
+                    return (
+                      <Box
+                        key={shop.id}
+                        onClick={() => {
+                          setSelectedShopId(shop.id);
+                          setShowAddShop(false);
+                        }}
+                        sx={{
+                          p: 1.25,
+                          borderRadius: 2,
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease',
+                          bgcolor: isSelected ? '#EEF2FF !important' : '#FFFFFF !important',
+                          border: isSelected ? '2px solid #4F46E5 !important' : '1px solid #E2E8F0 !important',
+                          boxShadow: isSelected ? '0 2px 8px rgba(79, 70, 229, 0.18)' : '0 1px 2px rgba(0,0,0,0.03)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 1.25,
+                          '&:hover': {
+                            bgcolor: isSelected ? '#EEF2FF !important' : '#F8FAFC !important',
+                            borderColor: isSelected ? '#4F46E5 !important' : '#CBD5E1 !important',
+                          },
+                        }}
+                      >
+                        {isSelected ? (
+                          <CheckCircleIcon sx={{ color: '#4F46E5', fontSize: 20, flexShrink: 0 }} />
+                        ) : (
+                          <RadioButtonUncheckedIcon sx={{ color: '#94A3B8', fontSize: 20, flexShrink: 0 }} />
+                        )}
+
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
+                            <Typography
+                              sx={{
+                                fontWeight: isSelected ? 800 : 700,
+                                fontSize: 13,
+                                color: isSelected ? '#1E1B4B !important' : '#0F172A !important',
+                              }}
+                            >
+                              🏪 {shop.shopName}
+                            </Typography>
+                            {isNear && (
+                              <Chip
+                                label="📍 Near Customer"
+                                size="small"
+                                sx={{
+                                  height: 18,
+                                  fontSize: 9.5,
+                                  fontWeight: 800,
+                                  bgcolor: '#DCFCE7 !important',
+                                  color: '#15803D !important',
+                                  border: '1px solid #BBF7D0',
+                                }}
+                              />
+                            )}
+                          </Box>
+
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.25, flexWrap: 'wrap' }}>
+                            {shop.pincode && (
+                              <Typography
+                                sx={{
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  color: isSelected ? '#4338CA !important' : '#6366F1 !important',
+                                }}
+                              >
+                                PIN: {shop.pincode}
+                              </Typography>
+                            )}
+                            {(shop.address || shop.city) && (
+                              <Typography
+                                sx={{
+                                  fontSize: 11,
+                                  color: '#64748B !important',
+                                  whiteSpace: 'nowrap',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  maxWidth: 200,
+                                }}
+                              >
+                                {[shop.address, shop.city].filter(Boolean).join(', ')}
+                              </Typography>
+                            )}
+                          </Box>
+                        </Box>
+                      </Box>
+                    );
+                  })
+                )}
+              </Box>
+
+              {/* Add New Shop Button Toggle */}
+              <Box
+                sx={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  mt: 1.5,
+                  pt: 1,
+                  borderTop: '1px solid #F1F5F9',
+                }}
+              >
+                <Typography sx={{ fontSize: 11, color: '#64748B !important' }}>
+                  Don't see the laundry shop in list?
+                </Typography>
                 <Button
                   size="small"
                   variant="text"
-                  onClick={() => setShowAddShop(!showAddShop)}
-                  sx={{ textTransform: 'none', fontWeight: 700, fontSize: 12 }}
+                  onClick={() => {
+                    if (!showAddShop && customerPin && !newShopPincode) {
+                      setNewShopPincode(customerPin);
+                    }
+                    setShowAddShop(!showAddShop);
+                  }}
+                  sx={{
+                    textTransform: 'none',
+                    fontWeight: 800,
+                    fontSize: 12,
+                    color: '#4F46E5 !important',
+                    p: 0.5,
+                    '&:hover': { bgcolor: '#EEF2FF' },
+                  }}
                 >
-                  {showAddShop ? 'Cancel Add New Shop' : '+ Add New Laundry Shop'}
+                  {showAddShop ? 'Cancel Add' : '+ Add New Shop'}
                 </Button>
               </Box>
 
+              {/* Add New Shop Collapsible Form */}
               {showAddShop && (
-                <Card variant="outlined" sx={{ p: 1.5, mt: 1, bgcolor: '#F9FAFB', borderRadius: 2 }}>
-                  <Typography variant="caption" sx={{ fontWeight: 700, display: 'block', mb: 1, color: '#4B5563' }}>
-                    NEW LAUNDRY SHOP DETAILS:
-                  </Typography>
-                  <TextField
-                    fullWidth size="small" label="Shop Name"
-                    value={newShopName} onChange={(e) => setNewShopName(e.target.value)}
-                    sx={{ mb: 1 }}
-                  />
-                  <TextField
-                    fullWidth size="small" label="Pincode"
-                    value={newShopPincode} onChange={(e) => setNewShopPincode(e.target.value)}
-                    sx={{ mb: 1.5 }}
-                  />
-                  <Button
-                    fullWidth size="small" variant="contained"
-                    disabled={creatingShop || !newShopName.trim() || !newShopPincode.trim()}
-                    onClick={handleCreateShop}
-                    sx={{ textTransform: 'none', fontWeight: 700 }}
+                <Box ref={addShopRef} sx={{ scrollMarginTop: '16px', mt: 1 }}>
+                  <Card
+                    variant="outlined"
+                    sx={{
+                      p: 1.75,
+                      bgcolor: '#F8FAFC !important',
+                      borderRadius: 2,
+                      border: '2px solid #6366F1',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.08)',
+                    }}
                   >
-                    {creatingShop ? 'Creating...' : 'Create & Select Shop'}
-                  </Button>
-                </Card>
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        fontWeight: 800,
+                        display: 'block',
+                        mb: 1.25,
+                        color: '#1E293B !important',
+                        fontSize: 12,
+                        letterSpacing: 0.5,
+                      }}
+                    >
+                      ✨ NEW LAUNDRY SHOP DETAILS:
+                    </Typography>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label="Shop Name"
+                      placeholder="e.g. Ashok Laundry"
+                      value={newShopName}
+                      onChange={(e) => setNewShopName(e.target.value)}
+                      slotProps={{
+                        input: {
+                          style: {
+                            color: '#0F172A',
+                            backgroundColor: '#FFFFFF',
+                            fontSize: 13.5,
+                            fontWeight: 600,
+                          },
+                        },
+                        htmlInput: {
+                          style: {
+                            color: '#0F172A',
+                            WebkitTextFillColor: '#0F172A',
+                            backgroundColor: '#FFFFFF',
+                            fontSize: 13.5,
+                            fontWeight: 600,
+                          },
+                        },
+                        inputLabel: {
+                          shrink: true,
+                          style: {
+                            color: '#1E293B',
+                            fontWeight: 800,
+                            fontSize: 13,
+                          },
+                        },
+                      }}
+                      sx={{
+                        mb: 1.25,
+                        bgcolor: '#FFFFFF !important',
+                        borderRadius: 1.5,
+                        '& .MuiInputBase-root': { bgcolor: '#FFFFFF !important', color: '#0F172A !important' },
+                        '& .MuiInputBase-input': { color: '#0F172A !important', WebkitTextFillColor: '#0F172A !important' },
+                        '& .MuiInputLabel-root': { color: '#1E293B !important', fontWeight: 800 },
+                        '& .MuiOutlinedInput-notchedOutline': { borderColor: '#94A3B8 !important', borderWidth: '1.5px !important' },
+                        '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#4F46E5 !important' },
+                        '& .Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#4F46E5 !important', borderWidth: '2px !important' },
+                      }}
+                    />
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label="Pincode (6 Digits)"
+                      placeholder="e.g. 400078"
+                      value={newShopPincode}
+                      onChange={(e) => setNewShopPincode(e.target.value.replace(/\D/g, '').substring(0, 6))}
+                      slotProps={{
+                        input: {
+                          style: {
+                            color: '#0F172A',
+                            backgroundColor: '#FFFFFF',
+                            fontSize: 13.5,
+                            fontWeight: 600,
+                          },
+                        },
+                        htmlInput: {
+                          style: {
+                            color: '#0F172A',
+                            WebkitTextFillColor: '#0F172A',
+                            backgroundColor: '#FFFFFF',
+                            fontSize: 13.5,
+                            fontWeight: 600,
+                          },
+                        },
+                        inputLabel: {
+                          shrink: true,
+                          style: {
+                            color: '#1E293B',
+                            fontWeight: 800,
+                            fontSize: 13,
+                          },
+                        },
+                      }}
+                      sx={{
+                        mb: 1.5,
+                        bgcolor: '#FFFFFF !important',
+                        borderRadius: 1.5,
+                        '& .MuiInputBase-root': { bgcolor: '#FFFFFF !important', color: '#0F172A !important' },
+                        '& .MuiInputBase-input': { color: '#0F172A !important', WebkitTextFillColor: '#0F172A !important' },
+                        '& .MuiInputLabel-root': { color: '#1E293B !important', fontWeight: 800 },
+                        '& .MuiOutlinedInput-notchedOutline': { borderColor: '#94A3B8 !important', borderWidth: '1.5px !important' },
+                        '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#4F46E5 !important' },
+                        '& .Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#4F46E5 !important', borderWidth: '2px !important' },
+                      }}
+                    />
+                    <Button
+                      fullWidth
+                      size="medium"
+                      variant="contained"
+                      disabled={creatingShop || !newShopName.trim() || !newShopPincode.trim()}
+                      onClick={handleCreateShop}
+                      sx={{
+                        textTransform: 'none',
+                        fontWeight: 800,
+                        py: 1,
+                        fontSize: 13,
+                        bgcolor: '#4F46E5 !important',
+                        color: '#FFFFFF !important',
+                        borderRadius: 1.5,
+                        boxShadow: '0 2px 4px rgba(79, 70, 229, 0.3)',
+                        '&:hover': { bgcolor: '#4338CA !important' },
+                        '&.Mui-disabled': { bgcolor: '#E2E8F0 !important', color: '#94A3B8 !important' },
+                      }}
+                    >
+                      {creatingShop ? 'Creating Shop...' : '+ Create & Select Shop'}
+                    </Button>
+                  </Card>
+                </Box>
               )}
             </Box>
           )}
         </DialogContent>
-        <DialogActions sx={{ px: 2, pb: 2 }}>
-          <Button onClick={() => setConfirmDialog(null)} sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600 }}>No, Go Back</Button>
+        <DialogActions
+          sx={{
+            px: { xs: 2, sm: 2.5 },
+            pb: { xs: 2, sm: 2.5 },
+            pt: 1.5,
+            borderTop: '1px solid #E2E8F0',
+            display: 'flex',
+            gap: 1,
+            bgcolor: '#FAFAFA',
+            borderBottomLeftRadius: 12,
+            borderBottomRightRadius: 12,
+          }}
+        >
+          <Button
+            onClick={() => {
+              setConfirmDialog(null);
+              setShowAddShop(false);
+              setNewShopName('');
+              setNewShopPincode('');
+              setShopFilter('');
+            }}
+            sx={{
+              flex: 1,
+              borderRadius: 2,
+              textTransform: 'none',
+              fontWeight: 700,
+              fontSize: 13,
+              color: '#475569 !important',
+              bgcolor: '#F1F5F9',
+              '&:hover': { bgcolor: '#E2E8F0' },
+            }}
+          >
+            No, Go Back
+          </Button>
           <Button
             variant="contained"
             disabled={isLoading || (confirmDialog?.status === 'Completed' && !selectedShopId)}
-            onClick={() => { if (confirmDialog) { onAction(pickup.id, confirmDialog.status, selectedShopId ? Number(selectedShopId) : undefined); setConfirmDialog(null); } }}
+            onClick={() => {
+              if (confirmDialog) {
+                onAction(pickup.id, confirmDialog.status, selectedShopId ? Number(selectedShopId) : undefined);
+                setConfirmDialog(null);
+                setShowAddShop(false);
+                setNewShopName('');
+                setNewShopPincode('');
+                setShopFilter('');
+              }
+            }}
             sx={{
-              borderRadius: 2, textTransform: 'none', fontWeight: 700,
-              bgcolor: confirmDialog?.status === 'Completed' ? '#10B981' : '#EF4444',
-              '&:hover': { bgcolor: confirmDialog?.status === 'Completed' ? '#059669' : '#DC2626' },
+              flex: 1.5,
+              borderRadius: 2,
+              textTransform: 'none',
+              fontWeight: 800,
+              fontSize: 13,
+              bgcolor: confirmDialog?.status === 'Completed' ? '#10B981 !important' : '#EF4444 !important',
+              color: '#FFFFFF !important',
+              boxShadow: confirmDialog?.status === 'Completed'
+                ? '0 2px 8px rgba(16, 185, 129, 0.35)'
+                : '0 2px 8px rgba(239, 68, 68, 0.35)',
+              '&:hover': {
+                bgcolor: confirmDialog?.status === 'Completed' ? '#059669 !important' : '#DC2626 !important',
+              },
+              '&.Mui-disabled': {
+                bgcolor: '#E2E8F0 !important',
+                color: '#94A3B8 !important',
+                boxShadow: 'none',
+              },
             }}
           >
-            {isLoading ? <CircularProgress size={16} color="inherit" /> : 'Yes, Confirm'}
+            {isLoading ? (
+              <CircularProgress size={16} color="inherit" />
+            ) : confirmDialog?.status === 'Completed' ? (
+              selectedShop ? `Drop to ${selectedShop.shopName.length > 15 ? selectedShop.shopName.substring(0, 15) + '...' : selectedShop.shopName} ✓` : 'Select Shop to Confirm'
+            ) : (
+              'Yes, Cancel Pickup'
+            )}
           </Button>
         </DialogActions>
       </Dialog>
@@ -488,15 +1235,17 @@ const PickupCard: React.FC<{
 
 const DeliveryCard: React.FC<{
   delivery: DeliveryAssignment;
-  onAction: (id: number, status: string, remarks?: string, otp?: string) => void;
+  onAction: (id: number, status: string, remarks?: string, otp?: string, paymentMode?: string) => void;
   isLoading: boolean;
 }> = ({ delivery, onAction, isLoading }) => {
   const [expanded, setExpanded] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<{ status: string; label: string } | null>(null);
   const [enteredOtp, setEnteredOtp] = useState('');
   const [otpSent, setOtpSent] = useState(false);
+  const [sentOtpCode, setSentOtpCode] = useState<string>('');
   const [requestingOtp, setRequestingOtp] = useState(false);
   const [otpError, setOtpError] = useState('');
+  const [collectedPaymentMode, setCollectedPaymentMode] = useState<string>('Cash');
 
   const handleRequestOtp = async () => {
     setRequestingOtp(true);
@@ -504,9 +1253,8 @@ const DeliveryCard: React.FC<{
     try {
       const res = await requestDeliveryOtp(delivery.id);
       setOtpSent(true);
-      // For development/mock, let's display the OTP in a toast or notification!
       if (res.otp) {
-        alert(`[DEV MODE] Delivery Completion OTP sent to customer is: ${res.otp}`);
+        setSentOtpCode(res.otp);
       }
     } catch (err: any) {
       setOtpError(err.response?.data?.message || 'Failed to send OTP');
@@ -518,7 +1266,8 @@ const DeliveryCard: React.FC<{
   const statusCfg = deliveryStatusConfig[delivery.deliveryStatus] ?? deliveryStatusConfig.Pending;
   const isDone = delivery.deliveryStatus === 'Delivered' || delivery.deliveryStatus === 'Failed';
   const customer = delivery.order?.customer;
-  const address = customer ? buildAddress(customer) : '';
+  const addrInfo = resolveDisplayAddress(delivery.order, customer, null);
+  const address = addrInfo.fullAddress;
 
   return (
     <>
@@ -545,23 +1294,39 @@ const DeliveryCard: React.FC<{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             }}
           >
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
               <Box
                 sx={{
-                  width: 36, height: 36, borderRadius: 2,
-                  background: 'linear-gradient(135deg, #F59E0B, #D97706)',
+                  width: 40, height: 40, borderRadius: 2,
+                  background: isDone
+                    ? 'linear-gradient(135deg, #9CA3AF, #6B7280)'
+                    : 'linear-gradient(135deg, #F59E0B, #D97706)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  flexShrink: 0,
+                  boxShadow: isDone ? 'none' : '0 2px 6px rgba(245, 158, 11, 0.3)',
                 }}
               >
-                <LocalLaundryServiceIcon sx={{ color: '#fff', fontSize: 18 }} />
+                <LocalLaundryServiceIcon sx={{ color: '#fff', fontSize: 20 }} />
               </Box>
-              <Box>
-                <Typography sx={{ fontWeight: 800, fontSize: 13, color: '#78350F' }}>
-                  {delivery.order?.orderNumber ?? `Delivery #${delivery.id}`}
+              <Box sx={{ minWidth: 0 }}>
+                {/* 1. ORDER NUMBER (Displayed directly above Delivery #) */}
+                <Typography sx={{ fontWeight: 900, fontSize: 15, color: isDone ? '#374151' : '#78350F', lineHeight: 1.2, mb: 0.25 }}>
+                  Order #{delivery.order?.orderNumber || (delivery as any).orderNumber || `ORD-${String(delivery.orderId).padStart(5, '0')}`}
                 </Typography>
-                <Typography sx={{ fontSize: 11, color: '#92400E' }}>
-                  Delivery #{delivery.id}
-                </Typography>
+                {/* 2. DELIVERY # and CUSTOMER PHONE */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
+                  <Typography sx={{ fontSize: 12, color: isDone ? '#4B5563' : '#D97706', fontWeight: 800 }}>
+                    Delivery #{delivery.id}
+                  </Typography>
+                  {delivery.order?.customer?.mobileNumber && (
+                    <>
+                      <Typography sx={{ fontSize: 11, color: '#9CA3AF' }}>•</Typography>
+                      <Typography sx={{ fontSize: 11, color: '#4B5563', fontWeight: 600 }}>
+                        {delivery.order.customer.mobileNumber}
+                      </Typography>
+                    </>
+                  )}
+                </Box>
               </Box>
             </Box>
             <Chip
@@ -576,17 +1341,65 @@ const DeliveryCard: React.FC<{
 
           {/* Customer Info */}
           <Box sx={{ px: 2, pt: 1.5, pb: 0.5 }}>
+            {/* Prominent Order No Badge */}
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                px: 1.5,
+                py: 1,
+                mb: 1.5,
+                bgcolor: '#FEF3C7',
+                borderRadius: 2,
+                border: '1.5px solid #F59E0B',
+                boxShadow: '0 1px 3px rgba(245, 158, 11, 0.1)',
+              }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                <Typography sx={{ fontSize: 12, fontWeight: 800, color: '#78350F' }}>
+                  📦 Order No:
+                </Typography>
+                <Typography sx={{ fontSize: 14, fontWeight: 900, color: '#D97706', letterSpacing: '0.5px' }}>
+                  {delivery.order?.orderNumber || (delivery as any).orderNumber || `ORD-${String(delivery.orderId).padStart(5, '0')}`}
+                </Typography>
+              </Box>
+              <Chip
+                label={delivery.order?.orderNumber ? 'Linked Order' : `Delivery #${delivery.id}`}
+                size="small"
+                sx={{ height: 20, fontSize: 10, fontWeight: 800, bgcolor: '#FDE68A', color: '#92400E' }}
+              />
+            </Box>
+
             {customer && (
               <>
                 <Typography sx={{ fontWeight: 800, fontSize: 16, color: '#111827', mb: 0.25 }}>
                   {customer.firstName} {customer.lastName}
                 </Typography>
                 <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5, mb: 1 }}>
-                  <LocationOnIcon sx={{ fontSize: 13, color: '#F59E0B', mt: 0.1 }} />
-                  <Typography sx={{ fontSize: 12, color: '#374151', lineHeight: 1.4, flex: 1 }}>
-                    {address}
-                    {customer.pincode && ` - ${customer.pincode}`}
-                  </Typography>
+                  <LocationOnIcon sx={{ fontSize: 14, color: '#F59E0B', mt: 0.2, flexShrink: 0 }} />
+                  <Box sx={{ flex: 1 }}>
+                    {addrInfo.title && (
+                      <Chip
+                        icon={<HomeIcon sx={{ fontSize: '11px !important' }} />}
+                        label={addrInfo.title}
+                        size="small"
+                        sx={{
+                          height: 18,
+                          fontSize: 10,
+                          fontWeight: 800,
+                          mr: 0.75,
+                          mb: 0.25,
+                          bgcolor: addrInfo.title.toLowerCase() === 'work' ? '#EEF2FF' : '#DCFCE7',
+                          color: addrInfo.title.toLowerCase() === 'work' ? '#4338CA' : '#15803D',
+                          border: addrInfo.title.toLowerCase() === 'work' ? '1px solid #C7D2FE' : '1px solid #BBF7D0',
+                        }}
+                      />
+                    )}
+                    <Typography component="span" sx={{ fontSize: 12, color: '#374151', lineHeight: 1.4 }}>
+                      {address || 'Address not specified'}
+                    </Typography>
+                  </Box>
                 </Box>
               </>
             )}
@@ -609,18 +1422,27 @@ const DeliveryCard: React.FC<{
               </Box>
             )}
 
-            {/* Payment status indicator */}
-            {delivery.order?.paymentStatus && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
+            {/* Payment Details */}
+            {delivery.order && (
+              <Box
+                sx={{
+                  display: 'flex', alignItems: 'center', gap: 1, mt: 1, mb: 1,
+                  px: 1.5, py: 0.85,
+                  bgcolor: delivery.order.paymentStatus === 'Paid' ? '#ECFDF5' : '#FFFBEB',
+                  borderRadius: 2,
+                  border: delivery.order.paymentStatus === 'Paid' ? '1px solid #A7F3D0' : '1px solid #FDE68A',
+                }}
+              >
                 <Box
                   sx={{
                     width: 8, height: 8, borderRadius: '50%',
                     bgcolor: delivery.order.paymentStatus === 'Paid' ? '#10B981' : '#F59E0B',
                   }}
                 />
-                <Typography sx={{ fontSize: 11, color: '#6B7280', fontWeight: 600 }}>
-                  Payment: {delivery.order.paymentStatus}
-                  {delivery.order.netAmount ? ` — ₹${delivery.order.netAmount.toFixed(2)}` : ''}
+                <Typography sx={{ fontSize: 12, fontWeight: 800, color: delivery.order.paymentStatus === 'Paid' ? '#047857' : '#B45309' }}>
+                  {delivery.order.paymentStatus === 'Paid'
+                    ? 'Payment: Paid'
+                    : `Payment: ₹${delivery.order.netAmount ? delivery.order.netAmount.toFixed(2) : '0.00'}`}
                 </Typography>
               </Box>
             )}
@@ -765,45 +1587,222 @@ const DeliveryCard: React.FC<{
       </Card>
 
       {/* Confirm Dialog */}
-      <Dialog open={!!confirmDialog} onClose={() => { setConfirmDialog(null); setOtpSent(false); setEnteredOtp(''); setOtpError(''); }} maxWidth="xs" fullWidth>
-        <DialogTitle sx={{ fontWeight: 800, pb: 0.5 }}>
+      <Dialog
+        open={!!confirmDialog}
+        onClose={() => { setConfirmDialog(null); setOtpSent(false); setSentOtpCode(''); setEnteredOtp(''); setOtpError(''); }}
+        maxWidth="xs"
+        fullWidth
+        slotProps={{
+          paper: {
+            sx: {
+              borderRadius: 3,
+              bgcolor: '#FFFFFF !important',
+              color: '#0F172A !important',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.1)',
+            },
+          },
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: 800, pb: 0.5, color: '#0F172A !important' }}>
           {confirmDialog?.label}
         </DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        <DialogContent sx={{ color: '#0F172A !important' }}>
+          <Typography variant="body2" sx={{ color: '#475569 !important', mb: 2 }}>
             {confirmDialog?.status === 'Delivered'
-              ? `Confirm that you have delivered the order ${delivery.order?.orderNumber} to ${customer?.firstName} ${customer?.lastName}?`
-              : `Mark this delivery as failed? The order will return to "Laundry" status.`}
+              ? `Confirm that you have delivered Order #${delivery.order?.orderNumber || `ORD-${String(delivery.orderId).padStart(5, '0')}`} (Delivery #${delivery.id}) to ${customer?.firstName} ${customer?.lastName}?`
+              : `Mark this delivery as failed? Order #${delivery.order?.orderNumber || `ORD-${String(delivery.orderId).padStart(5, '0')}`} will return to "Laundry" status.`}
           </Typography>
 
           {confirmDialog?.status === 'Delivered' && (
             <Box sx={{ mt: 1 }}>
+              {delivery.order?.paymentStatus !== 'Paid' ? (
+                <Box
+                  sx={{
+                    p: 1.5, mb: 2, bgcolor: '#FFFBEB', borderRadius: 2,
+                    border: '1.5px solid #F59E0B',
+                  }}
+                >
+                  <Typography sx={{ fontWeight: 800, fontSize: 13, color: '#B45309', mb: 0.5, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    💵 Payment Collection Required
+                  </Typography>
+                  <Typography sx={{ fontSize: 12, color: '#92400E', fontWeight: 600, mb: 1.5 }}>
+                    Please collect <strong>₹{delivery.order?.netAmount ? delivery.order.netAmount.toFixed(2) : '0.00'}</strong> from {customer?.firstName} {customer?.lastName}.
+                  </Typography>
+
+                  <Typography variant="caption" sx={{ fontWeight: 700, color: '#78350F', display: 'block', mb: 0.5 }}>
+                    Select Payment Mode Collected:
+                  </Typography>
+                  <FormControl fullWidth size="small">
+                    <Select
+                      value={collectedPaymentMode}
+                      onChange={(e) => setCollectedPaymentMode(e.target.value)}
+                      MenuProps={{
+                        slotProps: {
+                          paper: {
+                            sx: {
+                              bgcolor: '#FFFFFF !important',
+                              color: '#0F172A !important',
+                              boxShadow: '0 10px 25px rgba(0,0,0,0.15)',
+                              '& .MuiMenuItem-root': {
+                                color: '#0F172A !important',
+                                fontWeight: 600,
+                                fontSize: 13,
+                                '&:hover': { bgcolor: '#F1F5F9' },
+                                '&.Mui-selected': { bgcolor: '#EEF2FF !important', color: '#4F46E5 !important', fontWeight: 800 },
+                              },
+                            },
+                          },
+                        },
+                      }}
+                      sx={{
+                        bgcolor: '#FFFFFF !important',
+                        color: '#0F172A !important',
+                        fontWeight: 700,
+                        fontSize: 13,
+                        '& .MuiOutlinedInput-notchedOutline': { borderColor: '#F59E0B' },
+                      }}
+                    >
+                      <MenuItem value="Cash">💵 Paid in Cash</MenuItem>
+                      <MenuItem value="GPay">📱 Paid in GPay (Google Pay)</MenuItem>
+                      <MenuItem value="UPI">📱 Paid in UPI / QR Code</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Box>
+              ) : (
+                <Box
+                  sx={{
+                    p: 1.5, mb: 2, bgcolor: '#ECFDF5', borderRadius: 2,
+                    border: '1.5px solid #10B981',
+                  }}
+                >
+                  <Typography sx={{ fontWeight: 800, fontSize: 13, color: '#047857', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    💳 Payment Received (Paid)
+                  </Typography>
+                  <Typography sx={{ fontSize: 11, color: '#065F46', mt: 0.25 }}>
+                    No cash collection required. Verify OTP to complete delivery.
+                  </Typography>
+                </Box>
+              )}
+
               {!otpSent ? (
                 <Button
                   fullWidth variant="contained"
                   disabled={requestingOtp}
                   onClick={handleRequestOtp}
-                  sx={{ textTransform: 'none', fontWeight: 700, borderRadius: 2 }}
+                  sx={{
+                    textTransform: 'none',
+                    fontWeight: 700,
+                    borderRadius: 2,
+                    py: 1.2,
+                    background: 'linear-gradient(135deg, #4F46E5, #4338CA)',
+                    boxShadow: '0 2px 8px rgba(79, 70, 229, 0.35)',
+                    '&:hover': { background: 'linear-gradient(135deg, #4338CA, #3730A3)' },
+                  }}
                 >
                   {requestingOtp ? <CircularProgress size={16} color="inherit" /> : '🔑 Send Verification OTP to Customer'}
                 </Button>
               ) : (
                 <Box>
-                  <Typography variant="body2" sx={{ fontWeight: 700, mb: 1, color: '#374151' }}>
+                  <Box
+                    sx={{
+                      p: 1.5, mb: 2, bgcolor: '#ECFDF5', borderRadius: 2,
+                      border: '1.5px solid #10B981',
+                    }}
+                  >
+                    <Typography sx={{ fontWeight: 800, fontSize: 13, color: '#047857', display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
+                      ✅ OTP Sent to Customer!
+                    </Typography>
+                    <Typography sx={{ fontSize: 12, color: '#065F46', lineHeight: 1.5 }}>
+                      Delivery verification OTP has been sent via SMS to <strong>{customer?.mobileNumber}</strong> and Email to <strong>{(customer as any)?.email}</strong>.
+                    </Typography>
+                    {sentOtpCode && (
+                      <Box sx={{ mt: 1.25, pt: 1, borderTop: '1px dashed #A7F3D0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <Typography sx={{ fontSize: 12, fontWeight: 700, color: '#065F46' }}>
+                          🔑 Verification Code:
+                        </Typography>
+                        <Chip
+                          label={sentOtpCode}
+                          size="small"
+                          sx={{
+                            bgcolor: '#047857',
+                            color: '#FFFFFF',
+                            fontWeight: 900,
+                            fontSize: 14,
+                            letterSpacing: 2,
+                            px: 1,
+                          }}
+                        />
+                      </Box>
+                    )}
+                  </Box>
+
+                  <Typography variant="body2" sx={{ fontWeight: 800, mb: 1, color: '#1E293B !important' }}>
                     Enter 6-digit Delivery OTP:
                   </Typography>
                   <TextField
-                    fullWidth size="small" placeholder="Enter OTP"
-                    value={enteredOtp} onChange={(e) => setEnteredOtp(e.target.value.replace(/\D/g, '').substring(0, 6))}
-                    slotProps={{ htmlInput: { maxLength: 6, style: { textAlign: 'center', letterSpacing: '4px', fontWeight: 'bold' } } }}
-                    sx={{ mb: 1.5 }}
+                    fullWidth
+                    size="small"
+                    placeholder="Enter 6-digit OTP"
+                    value={enteredOtp}
+                    onChange={(e) => setEnteredOtp(e.target.value.replace(/\D/g, '').substring(0, 6))}
+                    slotProps={{
+                      input: {
+                        style: {
+                          color: '#0F172A',
+                          backgroundColor: '#FFFFFF',
+                          fontWeight: 900,
+                          fontSize: 22,
+                          textAlign: 'center',
+                        },
+                      },
+                      htmlInput: {
+                        style: {
+                          color: '#0F172A',
+                          WebkitTextFillColor: '#0F172A',
+                          backgroundColor: '#FFFFFF',
+                          fontWeight: 900,
+                          fontSize: 22,
+                          textAlign: 'center',
+                          letterSpacing: '8px',
+                        },
+                      },
+                    }}
+                    sx={{
+                      mb: 1.5,
+                      bgcolor: '#FFFFFF !important',
+                      borderRadius: 1.5,
+                      '& .MuiInputBase-root': {
+                        bgcolor: '#FFFFFF !important',
+                        color: '#0F172A !important',
+                      },
+                      '& .MuiInputBase-input': {
+                        color: '#0F172A !important',
+                        WebkitTextFillColor: '#0F172A !important',
+                        textAlign: 'center',
+                        letterSpacing: '8px',
+                      },
+                      '& .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#94A3B8 !important',
+                        borderWidth: '1.5px !important',
+                      },
+                      '&:hover .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#4F46E5 !important',
+                      },
+                      '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#4F46E5 !important',
+                        borderWidth: '2px !important',
+                      },
+                    }}
                   />
-                  <Box sx={{ textAlign: 'right' }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Typography sx={{ fontSize: 11, color: '#64748B' }}>
+                      Customer provides OTP upon receiving clothes
+                    </Typography>
                     <Button
                       size="small" variant="text"
                       disabled={requestingOtp}
                       onClick={handleRequestOtp}
-                      sx={{ textTransform: 'none', fontWeight: 700, fontSize: 11 }}
+                      sx={{ textTransform: 'none', fontWeight: 700, fontSize: 11, color: '#4F46E5' }}
                     >
                       Resend OTP
                     </Button>
@@ -818,11 +1817,25 @@ const DeliveryCard: React.FC<{
           )}
         </DialogContent>
         <DialogActions sx={{ px: 2, pb: 2 }}>
-          <Button onClick={() => { setConfirmDialog(null); setOtpSent(false); setEnteredOtp(''); setOtpError(''); }} sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600 }}>No, Go Back</Button>
+          <Button onClick={() => { setConfirmDialog(null); setOtpSent(false); setSentOtpCode(''); setEnteredOtp(''); setOtpError(''); }} sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600 }}>No, Go Back</Button>
           <Button
             variant="contained"
             disabled={isLoading || (confirmDialog?.status === 'Delivered' && (!otpSent || enteredOtp.length !== 6))}
-            onClick={() => { if (confirmDialog) { onAction(delivery.id, confirmDialog.status, undefined, enteredOtp || undefined); setConfirmDialog(null); setOtpSent(false); setEnteredOtp(''); } }}
+            onClick={() => {
+              if (confirmDialog) {
+                onAction(
+                  delivery.id,
+                  confirmDialog.status,
+                  undefined,
+                  enteredOtp || undefined,
+                  delivery.order?.paymentStatus === 'Paid' ? undefined : collectedPaymentMode
+                );
+                setConfirmDialog(null);
+                setOtpSent(false);
+                setSentOtpCode('');
+                setEnteredOtp('');
+              }
+            }}
             sx={{
               borderRadius: 2, textTransform: 'none', fontWeight: 700,
               bgcolor: confirmDialog?.status === 'Delivered' ? '#10B981' : '#EF4444',
@@ -866,24 +1879,122 @@ const DeliveryBoyPage: React.FC = () => {
   const [toast, setToast] = useState<{ msg: string; severity: 'success' | 'error' } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Queries
+  // ── Auto-Refresh: 30-second polling ──────────────────────────────────────
+  // Queries auto-poll every 30s when tab is visible, immediately on tab focus
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [secondsAgo, setSecondsAgo] = useState(0);
+  const prevPickupCount = useRef<number>(-1);
+  const prevDeliveryCount = useRef<number>(-1);
+
   const { data: laundryShops = [] } = useQuery({ queryKey: ['laundry-shops'], queryFn: getLaundryShops });
 
   const {
-    data: pickups = [],
+    data: rawPickups = [],
     isLoading: pickupsLoading,
+    isFetching: pickupsFetching,
     refetch: refetchPickups,
-  } = useQuery({ queryKey: ['my-pickups'], queryFn: getMyPickupAssignments });
+  } = useQuery({
+    queryKey: ['my-pickups'],
+    queryFn: getMyPickupAssignments,
+    refetchInterval: 3_000,               // Auto-poll every 3 seconds for instant real-time live sync
+    refetchIntervalInBackground: true,    // Keep polling in background so updates arrive immediately
+    refetchOnWindowFocus: 'always',       // Immediately refresh when switching back to tab
+    staleTime: 0,                         // Always consider stale so refetch triggers immediate API call
+  });
 
   const {
     data: rawDeliveries = [],
     isLoading: deliveriesLoading,
+    isFetching: deliveriesFetching,
     refetch: refetchDeliveries,
-  } = useQuery({ queryKey: ['my-deliveries'], queryFn: getMyDeliveries });
+  } = useQuery({
+    queryKey: ['my-deliveries'],
+    queryFn: getMyDeliveries,
+    refetchInterval: 3_000,
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: 'always',
+    staleTime: 0,
+  });
+
+  // Deduplicate pickups: one active card per order
+  const pickups = useMemo(() => {
+    const map = new Map<string, PickupAssignment>();
+    // Sort rawPickups: completed/cancelled first, then active so active replaces completed if same order
+    const sorted = [...(rawPickups as PickupAssignment[])].sort((a, b) => {
+      const aDone = a.status === 'Completed' || a.status === 'Cancelled' ? 0 : 1;
+      const bDone = b.status === 'Completed' || b.status === 'Cancelled' ? 0 : 1;
+      if (aDone !== bDone) return aDone - bDone;
+      return a.id - b.id;
+    });
+
+    for (const p of sorted) {
+      const dedupeKey = p.order?.id ? `order_${p.order.id}` : `pickup_${p.id}`;
+      map.set(dedupeKey, p);
+    }
+
+    // Sort active ones first, followed by newest ID
+    return Array.from(map.values()).sort((a, b) => {
+      const aDone = a.status === 'Completed' || a.status === 'Cancelled' ? 1 : 0;
+      const bDone = b.status === 'Completed' || b.status === 'Cancelled' ? 1 : 0;
+      if (aDone !== bDone) return aDone - bDone;
+      return b.id - a.id;
+    });
+  }, [rawPickups]);
+
+  // Active heartbeat timer every 3 seconds to ensure polling never sleeps
+  useEffect(() => {
+    const liveTimer = setInterval(() => {
+      refetchPickups();
+      refetchDeliveries();
+    }, 3_000);
+    return () => clearInterval(liveTimer);
+  }, [refetchPickups, refetchDeliveries]);
+
+  // Update last-updated timestamp whenever a fetch completes
+  useEffect(() => {
+    if (!pickupsFetching && !deliveriesFetching) {
+      setLastUpdated(new Date());
+      setSecondsAgo(0);
+    }
+  }, [pickupsFetching, deliveriesFetching]);
+
+  // Tick the "last updated X seconds ago" counter every second
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setSecondsAgo(prev => prev + 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Detect new pickup assignments and show toast notification
+  useEffect(() => {
+    if (prevPickupCount.current === -1) {
+      prevPickupCount.current = pickups.length;
+      return;
+    }
+    const newCount = pickups.filter((p: any) => p.status === 'Assigned' || p.status === 'Pending').length;
+    if (newCount > prevPickupCount.current) {
+      setToast({ msg: `🚴 New pickup assigned! You have ${newCount} pickup${newCount > 1 ? 's' : ''} today.`, severity: 'success' });
+    }
+    prevPickupCount.current = newCount;
+  }, [pickups]);
+
+  // Detect new delivery assignments and show toast notification
+  useEffect(() => {
+    if (prevDeliveryCount.current === -1) {
+      prevDeliveryCount.current = rawDeliveries.length;
+      return;
+    }
+    const newCount = (rawDeliveries as any[]).filter(d => d.deliveryStatus === 'Pending').length;
+    if (newCount > prevDeliveryCount.current) {
+      setToast({ msg: `📦 New delivery assigned! Check your deliveries.`, severity: 'success' });
+    }
+    prevDeliveryCount.current = newCount;
+  }, [rawDeliveries]);
 
   const deliveries = useMemo(() => {
     const filtered = (rawDeliveries as any[]).filter(d =>
-      d.order && ['Laundry', 'Out For Delivery', 'Delivered'].includes(d.order.orderStatus)
+      d.order && ['Laundry', 'Processing', 'Washing', 'Dry Cleaning', 'Ironing', 'Ready For Delivery', 'Out For Delivery', 'Delivered'].includes(d.order.orderStatus)
     );
     const latestMap = new Map<number, any>();
     for (const d of filtered) {
@@ -892,7 +2003,12 @@ const DeliveryBoyPage: React.FC = () => {
         latestMap.set(d.orderId, d);
       }
     }
-    return Array.from(latestMap.values());
+    return Array.from(latestMap.values()).sort((a, b) => {
+      const aActive = a.deliveryStatus === 'Pending' || a.deliveryStatus === 'OutForDelivery' ? 0 : 1;
+      const bActive = b.deliveryStatus === 'Pending' || b.deliveryStatus === 'OutForDelivery' ? 0 : 1;
+      if (aActive !== bActive) return aActive - bActive;
+      return b.id - a.id;
+    });
   }, [rawDeliveries]);
 
   // Filtered lists
@@ -904,15 +2020,26 @@ const DeliveryBoyPage: React.FC = () => {
       const firstName = cust?.firstName?.toLowerCase() || '';
       const lastName = cust?.lastName?.toLowerCase() || '';
       const mobile = cust?.mobileNumber || '';
-      const addr = p.pickupAddress?.toLowerCase() || '';
+      const addrInfo = resolveDisplayAddress(p.order, cust, p.pickupAddress);
+      const fullAddr = addrInfo.fullAddress.toLowerCase();
+      const pin = (addrInfo.pincode || '').toLowerCase();
+      const orderNum = (p.order?.orderNumber || (p as any).orderNumber || '').toLowerCase();
       const pickupIdStr = String(p.id);
+      const shopName = (p.order?.laundryShop?.shopName || '').toLowerCase();
+      const shopPincode = (p.order?.laundryShop?.pincode || '').toLowerCase();
+      const status = (p.status || '').toLowerCase();
 
       return firstName.includes(query) ||
              lastName.includes(query) ||
              `${firstName} ${lastName}`.includes(query) ||
              mobile.includes(query) ||
-             addr.includes(query) ||
-             pickupIdStr.includes(query);
+             fullAddr.includes(query) ||
+             pin.includes(query) ||
+             orderNum.includes(query) ||
+             pickupIdStr.includes(query) ||
+             shopName.includes(query) ||
+             shopPincode.includes(query) ||
+             status.includes(query);
     });
   }, [pickups, searchQuery]);
 
@@ -925,15 +2052,26 @@ const DeliveryBoyPage: React.FC = () => {
       const firstName = cust?.firstName?.toLowerCase() || '';
       const lastName = cust?.lastName?.toLowerCase() || '';
       const mobile = cust?.mobileNumber || '';
-      const orderNum = order?.orderNumber?.toLowerCase() || '';
+      const addrInfo = resolveDisplayAddress(order, cust, null);
+      const fullAddr = addrInfo.fullAddress.toLowerCase();
+      const pin = (addrInfo.pincode || '').toLowerCase();
+      const orderNum = (order?.orderNumber || '').toLowerCase();
       const deliveryIdStr = String(d.id);
+      const shopName = (order?.laundryShop?.shopName || '').toLowerCase();
+      const shopPincode = (order?.laundryShop?.pincode || '').toLowerCase();
+      const status = (d.deliveryStatus || '').toLowerCase();
 
       return firstName.includes(query) ||
              lastName.includes(query) ||
              `${firstName} ${lastName}`.includes(query) ||
              mobile.includes(query) ||
+             fullAddr.includes(query) ||
+             pin.includes(query) ||
              orderNum.includes(query) ||
-             deliveryIdStr.includes(query);
+             deliveryIdStr.includes(query) ||
+             shopName.includes(query) ||
+             shopPincode.includes(query) ||
+             status.includes(query);
     });
   }, [deliveries, searchQuery]);
 
@@ -949,8 +2087,8 @@ const DeliveryBoyPage: React.FC = () => {
   });
 
   const deliveryMutation = useMutation({
-    mutationFn: ({ id, status, remarks, otp }: { id: number; status: string; remarks?: string; otp?: string }) =>
-      updateMyDeliveryStatus(id, status, remarks, otp),
+    mutationFn: ({ id, status, remarks, otp, paymentMode }: { id: number; status: string; remarks?: string; otp?: string; paymentMode?: string }) =>
+      updateMyDeliveryStatus(id, status, remarks, otp, paymentMode),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['my-deliveries'] });
       setToast({ msg: 'Delivery status updated!', severity: 'success' });
@@ -971,6 +2109,7 @@ const DeliveryBoyPage: React.FC = () => {
   const handleRefresh = useCallback(() => {
     refetchPickups();
     refetchDeliveries();
+    setToast({ msg: 'Refreshing...', severity: 'success' });
   }, [refetchPickups, refetchDeliveries]);
 
   const handleLogout = () => {
@@ -978,7 +2117,9 @@ const DeliveryBoyPage: React.FC = () => {
     window.location.href = '/admin/login';
   };
 
+  // Show spinner on initial load OR during any background fetch
   const isLoading = pickupsLoading || deliveriesLoading;
+  const isFetching = pickupsFetching || deliveriesFetching;
 
   return (
     <Box
@@ -1019,12 +2160,42 @@ const DeliveryBoyPage: React.FC = () => {
             >
               <WaterDropIcon sx={{ color: '#fff', fontSize: 18 }} />
             </Box>
-            <Typography sx={{ color: 'rgba(255,255,255,0.9)', fontSize: 13, fontWeight: 700, letterSpacing: 0.5 }}>
-              Grivana
-            </Typography>
+            <Box>
+              <Typography sx={{ color: 'rgba(255,255,255,0.9)', fontSize: 13, fontWeight: 700, letterSpacing: 0.5 }}>
+                Grivana
+              </Typography>
+              {/* Live indicator: shows last updated time */}
+              <Typography sx={{ color: 'rgba(255,255,255,0.6)', fontSize: 10, lineHeight: 1 }}>
+                {isFetching
+                  ? 'Updating...'
+                  : lastUpdated
+                  ? secondsAgo < 5
+                    ? '✅ Just updated'
+                    : `Updated ${secondsAgo}s ago`
+                  : 'Loading...'}
+              </Typography>
+            </Box>
           </Box>
-          <IconButton onClick={handleRefresh} size="small" sx={{ color: 'rgba(255,255,255,0.8)', '&:hover': { bgcolor: 'rgba(255,255,255,0.15)' } }}>
-            {isLoading ? <CircularProgress size={18} sx={{ color: '#fff' }} /> : <RefreshIcon fontSize="small" />}
+          {/* Refresh button — spins during auto-fetch */}
+          <IconButton
+            onClick={handleRefresh}
+            size="small"
+            title="Refresh now"
+            sx={{
+              color: 'rgba(255,255,255,0.8)',
+              '&:hover': { bgcolor: 'rgba(255,255,255,0.15)' },
+            }}
+          >
+            {(isLoading || isFetching)
+              ? <CircularProgress size={18} sx={{ color: '#fff' }} />
+              : <RefreshIcon
+                  fontSize="small"
+                  sx={{
+                    transition: 'transform 0.3s',
+                    '&:hover': { transform: 'rotate(180deg)' },
+                  }}
+                />
+            }
           </IconButton>
         </Box>
 
@@ -1081,14 +2252,38 @@ const DeliveryBoyPage: React.FC = () => {
       </Box>
 
       {/* ── Content Area ─────────────────────────────────────────────── */}
-      <Box sx={{ flex: 1, overflowY: 'auto', px: 2, pt: 2, pb: '90px' }}>
+      <Box
+        sx={{
+          flex: 1,
+          overflowY: 'auto',
+          overscrollBehavior: 'contain',
+          WebkitOverflowScrolling: 'touch',
+          touchAction: 'pan-y',
+          px: 2,
+          pt: 2,
+          pb: '120px',
+          '&::-webkit-scrollbar': {
+            width: '6px',
+          },
+          '&::-webkit-scrollbar-track': {
+            background: 'transparent',
+          },
+          '&::-webkit-scrollbar-thumb': {
+            background: '#CBD5E1',
+            borderRadius: '3px',
+          },
+          '&::-webkit-scrollbar-thumb:hover': {
+            background: '#94A3B8',
+          },
+        }}
+      >
 
         {/* Search Bar */}
         {activeTab !== 'profile' && (
           <TextField
             fullWidth
             size="small"
-            placeholder="Search customer, phone, or address..."
+            placeholder="🔍 Search customer, phone, address, shop, or order #..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             sx={{
@@ -1115,7 +2310,16 @@ const DeliveryBoyPage: React.FC = () => {
                       <ClearIcon sx={{ fontSize: 14 }} />
                     </IconButton>
                   </InputAdornment>
-                ) : null
+                ) : null,
+                sx: {
+                  color: '#0F172A !important',
+                  fontWeight: 600,
+                  fontSize: 14,
+                  '& input': {
+                    color: '#0F172A !important',
+                    WebkitTextFillColor: '#0F172A !important',
+                  },
+                },
               }
             }}
           />
@@ -1144,17 +2348,43 @@ const DeliveryBoyPage: React.FC = () => {
                 title={searchQuery ? "No Matching Pickups" : "No Pickups Assigned"}
                 subtitle={searchQuery ? "Try refining your search terms." : "You have no pickup tasks right now. Check back later or contact your manager."}
               />
-            ) : (
-              filteredPickups.map((pickup) => (
-                <PickupCard
-                  key={pickup.id}
-                  pickup={pickup}
-                  laundryShops={laundryShops}
-                  onAction={(id, status, shopId) => pickupMutation.mutate({ id, status, laundryShopId: shopId })}
-                  isLoading={pickupMutation.isPending}
-                />
-              ))
-            )}
+            ) : (() => {
+              const activeList = filteredPickups.filter(p => p.status === 'Pending' || p.status === 'Assigned');
+              const doneList = filteredPickups.filter(p => p.status === 'Completed' || p.status === 'Cancelled');
+              return (
+                <>
+                  {activeList.map((pickup) => (
+                    <PickupCard
+                      key={pickup.id}
+                      pickup={pickup}
+                      laundryShops={laundryShops}
+                      onAction={(id, status, shopId) => pickupMutation.mutate({ id, status, laundryShopId: shopId })}
+                      isLoading={pickupMutation.isPending}
+                    />
+                  ))}
+                  {doneList.length > 0 && (
+                    <Box sx={{ mt: 3, mb: 1.5 }}>
+                      <Divider sx={{ mb: 2 }}>
+                        <Chip
+                          label={`Completed Pickups (${doneList.length})`}
+                          size="small"
+                          sx={{ fontSize: 11, fontWeight: 800, bgcolor: '#F3F4F6', color: '#6B7280' }}
+                        />
+                      </Divider>
+                      {doneList.map((pickup) => (
+                        <PickupCard
+                          key={pickup.id}
+                          pickup={pickup}
+                          laundryShops={laundryShops}
+                          onAction={(id, status, shopId) => pickupMutation.mutate({ id, status, laundryShopId: shopId })}
+                          isLoading={pickupMutation.isPending}
+                        />
+                      ))}
+                    </Box>
+                  )}
+                </>
+              );
+            })()}
           </>
         )}
 
@@ -1181,16 +2411,41 @@ const DeliveryBoyPage: React.FC = () => {
                 title={searchQuery ? "No Matching Deliveries" : "No Deliveries Assigned"}
                 subtitle={searchQuery ? "Try refining your search terms." : "No delivery tasks yet. You'll see them here once assigned by admin."}
               />
-            ) : (
-              filteredDeliveries.map((delivery) => (
-                <DeliveryCard
-                  key={delivery.id}
-                  delivery={delivery}
-                  onAction={(id, status, remarks, otp) => deliveryMutation.mutate({ id, status, remarks, otp })}
-                  isLoading={deliveryMutation.isPending}
-                />
-              ))
-            )}
+            ) : (() => {
+              const activeDeliveries = filteredDeliveries.filter(d => d.deliveryStatus === 'Pending' || d.deliveryStatus === 'OutForDelivery');
+              const doneDeliveries = filteredDeliveries.filter(d => d.deliveryStatus === 'Delivered' || d.deliveryStatus === 'Failed');
+              return (
+                <>
+                  {activeDeliveries.map((delivery) => (
+                    <DeliveryCard
+                      key={delivery.id}
+                      delivery={delivery}
+                      onAction={(id, status, remarks, otp, paymentMode) => deliveryMutation.mutate({ id, status, remarks, otp, paymentMode })}
+                      isLoading={deliveryMutation.isPending}
+                    />
+                  ))}
+                  {doneDeliveries.length > 0 && (
+                    <Box sx={{ mt: 3, mb: 1.5 }}>
+                      <Divider sx={{ mb: 2 }}>
+                        <Chip
+                          label={`Completed Deliveries (${doneDeliveries.length})`}
+                          size="small"
+                          sx={{ fontSize: 11, fontWeight: 800, bgcolor: '#F3F4F6', color: '#6B7280' }}
+                        />
+                      </Divider>
+                      {doneDeliveries.map((delivery) => (
+                        <DeliveryCard
+                          key={delivery.id}
+                          delivery={delivery}
+                          onAction={(id, status, remarks, otp, paymentMode) => deliveryMutation.mutate({ id, status, remarks, otp, paymentMode })}
+                          isLoading={deliveryMutation.isPending}
+                        />
+                      ))}
+                    </Box>
+                  )}
+                </>
+              );
+            })()}
           </>
         )}
 
