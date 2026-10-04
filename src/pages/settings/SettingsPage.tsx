@@ -13,12 +13,15 @@ import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import PersonIcon from '@mui/icons-material/Person';
 import BusinessIcon from '@mui/icons-material/Business';
+import DescriptionIcon from '@mui/icons-material/Description';
+import SaveIcon from '@mui/icons-material/Save';
 import PageHeader from '../../components/PageHeader';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import { useAuth } from '../../hooks/useAuth';
 import { getBranches, createBranch, updateBranch, deleteBranch } from '../../api/branches';
 import { updateEmployee } from '../../api/employees';
 import { getTimeSlotsAdmin, createTimeSlot, updateTimeSlot, deleteTimeSlot } from '../../api/timeSlots';
+import { getLegalContent, updateLegalContent } from '../../api/legal';
 import type { Branch } from '../../types';
 
 const profileSchema = z.object({ fullName: z.string().min(2), mobileNumber: z.string().min(10) });
@@ -45,6 +48,36 @@ const SettingsPage: React.FC = () => {
   const [slotActive, setSlotActive] = useState(true);
 
   const [slotTab, setSlotTab] = useState(0);
+
+  // Legal Content Management states
+  const [legalTab, setLegalTab] = useState(0); // 0: Privacy Policy, 1: Terms of Use
+  const currentLegalKey = legalTab === 0 ? 'privacy-policy' : 'terms-of-use';
+  const [legalTitle, setLegalTitle] = useState('');
+  const [legalContentText, setLegalContentText] = useState('');
+
+  const { data: currentLegal, isLoading: isLegalLoading } = useQuery({
+    queryKey: ['legalContent', currentLegalKey],
+    queryFn: () => getLegalContent(currentLegalKey),
+  });
+
+  React.useEffect(() => {
+    if (currentLegal) {
+      setLegalTitle(currentLegal.title || (legalTab === 0 ? 'Privacy Policy' : 'Terms of Use'));
+      setLegalContentText(currentLegal.content || '');
+    }
+  }, [currentLegal, legalTab]);
+
+  const updateLegalMutation = useMutation({
+    mutationFn: (data: { title?: string; content: string }) =>
+      updateLegalContent(currentLegalKey, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['legalContent', currentLegalKey] });
+      setSnack(`${legalTab === 0 ? 'Privacy Policy' : 'Terms of Use'} updated successfully!`);
+    },
+    onError: (err: any) => {
+      setSnack(err.response?.data?.message || 'Failed to update legal content');
+    },
+  });
 
   const { data: branches = [] } = useQuery({ queryKey: ['branches'], queryFn: getBranches });
   const { data: timeSlots = [] } = useQuery({ queryKey: ['timeSlots'], queryFn: getTimeSlotsAdmin });
@@ -317,6 +350,74 @@ const SettingsPage: React.FC = () => {
                     </Grid>
                   )}
                 </Grid>
+              </CardContent>
+            </Card>
+          </Grid>
+        )}
+
+        {/* Legal & Policies Management (SuperAdmin and BranchManager) */}
+        {(user?.role === 'SuperAdmin' || user?.role === 'BranchManager') && (
+          <Grid size={{ xs: 12 }}>
+            <Card>
+              <CardContent sx={{ p: 3 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5, flexWrap: 'wrap', gap: 1 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                    <DescriptionIcon color="primary" />
+                    <Typography sx={{ fontWeight: 700 }}>Privacy Policy &amp; Terms of Use Management</Typography>
+                  </Box>
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    startIcon={updateLegalMutation.isPending ? <CircularProgress size={16} color="inherit" /> : <SaveIcon />}
+                    disabled={updateLegalMutation.isPending || isLegalLoading || !legalContentText.trim()}
+                    onClick={() => updateLegalMutation.mutate({ title: legalTitle, content: legalContentText })}
+                  >
+                    Save &amp; Publish
+                  </Button>
+                </Box>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  Edit and update the live legal policies stored in the database. Customer mobile apps and web pages reflect these updates dynamically.
+                </Typography>
+
+                <Tabs
+                  value={legalTab}
+                  onChange={(_, val) => setLegalTab(val)}
+                  sx={{ mb: 2.5, borderBottom: 1, borderColor: 'divider' }}
+                >
+                  <Tab label="Privacy Policy" sx={{ fontWeight: 700, textTransform: 'none' }} />
+                  <Tab label="Terms of Use" sx={{ fontWeight: 700, textTransform: 'none' }} />
+                </Tabs>
+
+                {isLegalLoading ? (
+                  <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                    <CircularProgress />
+                  </Box>
+                ) : (
+                  <Stack spacing={2.5}>
+                    <TextField
+                      label="Document Title"
+                      size="small"
+                      fullWidth
+                      value={legalTitle}
+                      onChange={(e) => setLegalTitle(e.target.value)}
+                    />
+                    <TextField
+                      label="Policy Content (Clauses, Rules & Guidelines)"
+                      multiline
+                      minRows={10}
+                      maxRows={22}
+                      fullWidth
+                      value={legalContentText}
+                      onChange={(e) => setLegalContentText(e.target.value)}
+                      helperText="Supports section numbering, bullet points, and plain text."
+                    />
+                    {currentLegal?.updatedDate && (
+                      <Typography variant="caption" color="text.secondary">
+                        Last saved in database: {new Date(currentLegal.updatedDate).toLocaleString()}
+                      </Typography>
+                    )}
+                  </Stack>
+                )}
               </CardContent>
             </Card>
           </Grid>
