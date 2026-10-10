@@ -50,9 +50,9 @@ const SettingsPage: React.FC = () => {
   const [slotTab, setSlotTab] = useState(0);
 
   // Legal Content Management states
-  const [legalTab, setLegalTab] = useState(1); // 0: Privacy Policy, 1: Terms of Use, 2: FAQ
-  const legalKeys = ['privacy-policy', 'terms-of-use', 'faq'];
-  const legalLabels = ['Privacy Policy', 'Terms of Use', 'Frequently Asked Questions (FAQ)'];
+  const [legalTab, setLegalTab] = useState(1); // 0: Privacy Policy, 1: Terms of Use, 2: FAQ, 3: About Grivana
+  const legalKeys = ['privacy-policy', 'terms-of-use', 'faq', 'about-grivana'];
+  const legalLabels = ['Privacy Policy', 'Terms of Use', 'Frequently Asked Questions (FAQ)', 'About Grivana'];
   const currentLegalKey = legalKeys[legalTab] || 'terms-of-use';
   const [legalTitle, setLegalTitle] = useState('');
   const [legalContentText, setLegalContentText] = useState('');
@@ -389,6 +389,7 @@ const SettingsPage: React.FC = () => {
                   <Tab label="Privacy Policy" sx={{ fontWeight: 700, textTransform: 'none' }} />
                   <Tab label="Terms of Use" sx={{ fontWeight: 700, textTransform: 'none' }} />
                   <Tab label="FAQs" sx={{ fontWeight: 700, textTransform: 'none' }} />
+                  <Tab label="About Grivana" sx={{ fontWeight: 700, textTransform: 'none' }} />
                 </Tabs>
 
                 {isLegalLoading ? (
