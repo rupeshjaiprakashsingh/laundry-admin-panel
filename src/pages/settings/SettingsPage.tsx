@@ -50,8 +50,10 @@ const SettingsPage: React.FC = () => {
   const [slotTab, setSlotTab] = useState(0);
 
   // Legal Content Management states
-  const [legalTab, setLegalTab] = useState(0); // 0: Privacy Policy, 1: Terms of Use
-  const currentLegalKey = legalTab === 0 ? 'privacy-policy' : 'terms-of-use';
+  const [legalTab, setLegalTab] = useState(1); // 0: Privacy Policy, 1: Terms of Use, 2: FAQ
+  const legalKeys = ['privacy-policy', 'terms-of-use', 'faq'];
+  const legalLabels = ['Privacy Policy', 'Terms of Use', 'Frequently Asked Questions (FAQ)'];
+  const currentLegalKey = legalKeys[legalTab] || 'terms-of-use';
   const [legalTitle, setLegalTitle] = useState('');
   const [legalContentText, setLegalContentText] = useState('');
 
@@ -62,7 +64,7 @@ const SettingsPage: React.FC = () => {
 
   React.useEffect(() => {
     if (currentLegal) {
-      setLegalTitle(currentLegal.title || (legalTab === 0 ? 'Privacy Policy' : 'Terms of Use'));
+      setLegalTitle(currentLegal.title || legalLabels[legalTab]);
       setLegalContentText(currentLegal.content || '');
     }
   }, [currentLegal, legalTab]);
@@ -72,7 +74,7 @@ const SettingsPage: React.FC = () => {
       updateLegalContent(currentLegalKey, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['legalContent', currentLegalKey] });
-      setSnack(`${legalTab === 0 ? 'Privacy Policy' : 'Terms of Use'} updated successfully!`);
+      setSnack(`${legalLabels[legalTab]} updated successfully!`);
     },
     onError: (err: any) => {
       setSnack(err.response?.data?.message || 'Failed to update legal content');
@@ -386,6 +388,7 @@ const SettingsPage: React.FC = () => {
                 >
                   <Tab label="Privacy Policy" sx={{ fontWeight: 700, textTransform: 'none' }} />
                   <Tab label="Terms of Use" sx={{ fontWeight: 700, textTransform: 'none' }} />
+                  <Tab label="FAQs" sx={{ fontWeight: 700, textTransform: 'none' }} />
                 </Tabs>
 
                 {isLegalLoading ? (
