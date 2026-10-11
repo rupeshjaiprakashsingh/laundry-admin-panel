@@ -437,7 +437,13 @@ const OrdersPage: React.FC = () => {
                     <Typography variant="caption" color="text.secondary">Customer Instructions & Order Info</Typography>
                     <Box sx={{ p: 1.5, bgcolor: 'action.hover', borderRadius: 1, border: '1px solid', borderColor: 'divider', mt: 0.5 }}>
                       <Typography variant="body2" sx={{ whiteSpace: 'pre-line', fontStyle: selectedOrder.notes ? 'normal' : 'italic' }}>
-                        {selectedOrder.notes ? selectedOrder.notes.split('|').map(p => p.trim()).join('\n') : 'No notes or instructions provided.'}
+                        {selectedOrder.notes ? selectedOrder.notes.split('|').map(p => {
+                          let text = p.trim();
+                          if (/First Order Discount:\s*Rs\.\s*20\s*Applied/i.test(text) && selectedOrder.discountAmount >= 50) {
+                            text = `First Order Discount: Rs. ${selectedOrder.discountAmount.toFixed(0)} Applied`;
+                          }
+                          return text;
+                        }).join('\n') : 'No notes or instructions provided.'}
                       </Typography>
                     </Box>
                   </Grid>
@@ -490,6 +496,97 @@ const OrdersPage: React.FC = () => {
                     ))}
                   </TableBody>
                 </Table>
+              </Grid>
+
+              {/* ── Payment & Billing Breakdown Summary ── */}
+              <Grid size={{ xs: 12 }}>
+                <Divider sx={{ my: 1.5 }} />
+                <Typography sx={{ fontWeight: 700, mb: 1 }}>💳 Payment & Billing Summary</Typography>
+                <Box sx={{ p: 2, bgcolor: 'action.hover', borderRadius: 1.5, border: '1px solid', borderColor: 'divider' }}>
+                  <Grid container spacing={1.2}>
+                    <Grid size={{ xs: 6 }}>
+                      <Typography variant="body2" color="text.secondary">Subtotal</Typography>
+                    </Grid>
+                    <Grid size={{ xs: 6 }} sx={{ textAlign: 'right' }}>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>{formatCurrency(selectedOrder.totalAmount)}</Typography>
+                    </Grid>
+
+                    {selectedOrder.discountAmount > 0 && (
+                      <>
+                        <Grid size={{ xs: 6 }}>
+                          <Typography variant="body2" color="success.main" sx={{ fontWeight: 700 }}>
+                            Discount Applied
+                          </Typography>
+                        </Grid>
+                        <Grid size={{ xs: 6 }} sx={{ textAlign: 'right' }}>
+                          <Typography variant="body2" color="success.main" sx={{ fontWeight: 800 }}>
+                            -{formatCurrency(selectedOrder.discountAmount)}
+                          </Typography>
+                        </Grid>
+                      </>
+                    )}
+
+                    <Grid size={{ xs: 6 }}>
+                      <Typography variant="body2" color="text.secondary">Platform Fee</Typography>
+                    </Grid>
+                    <Grid size={{ xs: 6 }} sx={{ textAlign: 'right' }}>
+                      <Typography variant="body2">{formatCurrency((selectedOrder as any).platformFee ?? 5.0)}</Typography>
+                    </Grid>
+
+                    <Grid size={{ xs: 6 }}>
+                      <Typography variant="body2" color="text.secondary">GST (18%)</Typography>
+                    </Grid>
+                    <Grid size={{ xs: 6 }} sx={{ textAlign: 'right' }}>
+                      <Typography variant="body2">{formatCurrency(selectedOrder.taxAmount)}</Typography>
+                    </Grid>
+
+                    <Grid size={{ xs: 6 }}>
+                      <Typography variant="body2" color="text.secondary">Delivery Charge</Typography>
+                    </Grid>
+                    <Grid size={{ xs: 6 }} sx={{ textAlign: 'right' }}>
+                      <Typography variant="body2" color={((selectedOrder as any).deliveryCharge ?? 0) === 0 ? 'success.main' : 'text.primary'} sx={{ fontWeight: ((selectedOrder as any).deliveryCharge ?? 0) === 0 ? 700 : 400 }}>
+                        {((selectedOrder as any).deliveryCharge ?? 0) === 0 ? 'Free' : formatCurrency((selectedOrder as any).deliveryCharge)}
+                      </Typography>
+                    </Grid>
+
+                    {(selectedOrder as any).insuranceCharge && (selectedOrder as any).insuranceCharge > 0 ? (
+                      <>
+                        <Grid size={{ xs: 6 }}>
+                          <Typography variant="body2" color="text.secondary">Order Protection (Insurance)</Typography>
+                        </Grid>
+                        <Grid size={{ xs: 6 }} sx={{ textAlign: 'right' }}>
+                          <Typography variant="body2">{formatCurrency((selectedOrder as any).insuranceCharge)}</Typography>
+                        </Grid>
+                      </>
+                    ) : null}
+
+                    {(selectedOrder as any).totalSavings && (selectedOrder as any).totalSavings > 0 ? (
+                      <>
+                        <Grid size={{ xs: 6 }}>
+                          <Typography variant="body2" color="success.main" sx={{ fontWeight: 600 }}>Total Savings</Typography>
+                        </Grid>
+                        <Grid size={{ xs: 6 }} sx={{ textAlign: 'right' }}>
+                          <Typography variant="body2" color="success.main" sx={{ fontWeight: 700 }}>
+                            -{formatCurrency((selectedOrder as any).totalSavings)}
+                          </Typography>
+                        </Grid>
+                      </>
+                    ) : null}
+
+                    <Grid size={{ xs: 12 }}>
+                      <Divider sx={{ my: 0.5 }} />
+                    </Grid>
+
+                    <Grid size={{ xs: 6 }}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>Total Payable / Net Amount</Typography>
+                    </Grid>
+                    <Grid size={{ xs: 6 }} sx={{ textAlign: 'right' }}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 800, color: 'success.main', fontSize: 18 }}>
+                        {formatCurrency(selectedOrder.netAmount)}
+                      </Typography>
+                    </Grid>
+                  </Grid>
+                </Box>
               </Grid>
             </Grid>
           )}
