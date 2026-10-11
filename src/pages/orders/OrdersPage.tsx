@@ -23,6 +23,7 @@ import { getOrders, updateOrderStatus, updatePaymentStatus, bulkAssignOrdersToSh
 import { getLaundryShops } from '../../api/laundryShops';
 import { getEmployees } from '../../api/employees';
 import { formatCurrency, formatDate, formatDateTime, exportToExcel, exportToPDF } from '../../utils/export';
+import { renderPaymentChip, resolvePaymentInfo } from '../../utils/paymentUtils';
 import type { Order, LaundryShop, Employee } from '../../types';
 import api from '../../api/axios';
 
@@ -221,43 +222,11 @@ const OrdersPage: React.FC = () => {
     { field: 'createdDate', headerName: 'Date', width: 110, renderCell: (p) => formatDate(p.value) },
     { field: 'orderStatus', headerName: 'Status', width: 165, renderCell: (p) => <Chip label={p.value} color={statusColors[p.value] ?? 'default'} size="small" sx={{ fontWeight: 700 }} /> },
     {
-      field: 'paymentStatus', headerName: 'Payment', width: 180,
+      field: 'paymentStatus', headerName: 'Payment', width: 195,
       renderCell: (p) => {
         const row = p.row;
         const latestPayment = row.payments && row.payments.length > 0 ? row.payments[row.payments.length - 1] : null;
-        let mode = latestPayment?.paymentMode;
-        if (!mode && row.notes) {
-          const lower = row.notes.toLowerCase();
-          if (lower.includes('gpay') || lower.includes('google pay')) mode = 'GPay';
-          else if (lower.includes('upi') || lower.includes('qr')) mode = 'UPI';
-          else if (lower.includes('cash') || lower.includes('cod')) mode = 'Cash';
-          else if (lower.includes('online')) mode = 'Online';
-          else if (lower.includes('card')) mode = 'Card';
-        }
-
-        const isPaid = row.paymentStatus === 'Paid';
-        if (isPaid) {
-          const resolvedMode = mode || 'Cash';
-          if (resolvedMode === 'GPay') {
-            return <Chip label="📱 Paid in GPay" size="small" sx={{ fontWeight: 800, bgcolor: '#EEF2FF', color: '#4338CA', border: '1px solid #C7D2FE' }} />;
-          }
-          if (resolvedMode === 'UPI') {
-            return <Chip label="📱 Paid in UPI" size="small" sx={{ fontWeight: 800, bgcolor: '#F3E8FF', color: '#7E22CE', border: '1px solid #E9D5FF' }} />;
-          }
-          if (resolvedMode === 'Online') {
-            return <Chip label="🌐 Paid Online" size="small" sx={{ fontWeight: 800, bgcolor: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE' }} />;
-          }
-          if (resolvedMode === 'Card') {
-            return <Chip label="💳 Paid by Card" size="small" sx={{ fontWeight: 800, bgcolor: '#ECFEFF', color: '#0E7490', border: '1px solid #A5F3FC' }} />;
-          }
-          return <Chip label="💵 Paid in Cash" size="small" sx={{ fontWeight: 800, bgcolor: '#ECFDF5', color: '#047857', border: '1px solid #A7F3D0' }} />;
-        }
-
-        if (row.paymentStatus === 'Partially Paid') {
-          return <Chip label="⚠️ Partially Paid" size="small" sx={{ fontWeight: 800, bgcolor: '#FEF3C7', color: '#B45309', border: '1px solid #FDE68A' }} />;
-        }
-
-        return <Chip label={mode ? `⏳ Pending (${mode})` : '⏳ Pending'} size="small" sx={{ fontWeight: 700, bgcolor: '#FFFBEB', color: '#B45309', border: '1px solid #FDE68A' }} />;
+        return renderPaymentChip(row.paymentStatus, latestPayment?.paymentMode, row.notes);
       },
     },
     {
@@ -286,16 +255,8 @@ const OrdersPage: React.FC = () => {
             setNewStatus(p.row.orderStatus);
             setNewPayment(p.row.paymentStatus);
             const lastPayment = p.row.payments && p.row.payments.length > 0 ? p.row.payments[p.row.payments.length - 1] : null;
-            let mode = lastPayment?.paymentMode;
-            if (!mode && p.row.notes) {
-              const lower = p.row.notes.toLowerCase();
-              if (lower.includes('gpay') || lower.includes('google pay')) mode = 'GPay';
-              else if (lower.includes('upi') || lower.includes('qr')) mode = 'UPI';
-              else if (lower.includes('cash') || lower.includes('cod')) mode = 'Cash';
-              else if (lower.includes('online')) mode = 'Online';
-              else if (lower.includes('card')) mode = 'Card';
-            }
-            setNewPaymentMode(mode || 'Cash');
+            const { resolvedMode } = resolvePaymentInfo(p.row.paymentStatus, lastPayment?.paymentMode, p.row.notes);
+            setNewPaymentMode(resolvedMode === 'Pending' ? 'Cash' : resolvedMode);
           }}><EditIcon fontSize="small" /></IconButton></Tooltip>
         </Stack>
       ),
@@ -304,17 +265,8 @@ const OrdersPage: React.FC = () => {
 
   const getOrderPaymentLabel = (o: Order) => {
     const latestPayment = o.payments && o.payments.length > 0 ? o.payments[o.payments.length - 1] : null;
-    let mode = latestPayment?.paymentMode;
-    if (!mode && o.notes) {
-      const lower = o.notes.toLowerCase();
-      if (lower.includes('gpay') || lower.includes('google pay')) mode = 'GPay';
-      else if (lower.includes('upi') || lower.includes('qr')) mode = 'UPI';
-      else if (lower.includes('cash') || lower.includes('cod')) mode = 'Cash';
-    }
-    if (o.paymentStatus === 'Paid') {
-      return `Paid (${mode || 'Cash'})`;
-    }
-    return o.paymentStatus || 'Pending';
+    const { isPaid, displayLabel } = resolvePaymentInfo(o.paymentStatus, latestPayment?.paymentMode, o.notes);
+    return isPaid ? displayLabel.replace(/^[\p{Emoji}\s]+/u, '') : (o.paymentStatus || 'Pending');
   };
 
   const handleExcelExport = () => exportToExcel(
@@ -447,25 +399,7 @@ const OrdersPage: React.FC = () => {
                 <Box sx={{ mt: 0.5 }}>
                   {(() => {
                     const latestPayment = selectedOrder.payments && selectedOrder.payments.length > 0 ? selectedOrder.payments[selectedOrder.payments.length - 1] : null;
-                    let mode = latestPayment?.paymentMode;
-                    if (!mode && selectedOrder.notes) {
-                      const lower = selectedOrder.notes.toLowerCase();
-                      if (lower.includes('gpay') || lower.includes('google pay')) mode = 'GPay';
-                      else if (lower.includes('upi') || lower.includes('qr')) mode = 'UPI';
-                      else if (lower.includes('cash') || lower.includes('cod')) mode = 'Cash';
-                      else if (lower.includes('online')) mode = 'Online';
-                      else if (lower.includes('card')) mode = 'Card';
-                    }
-                    const isPaid = selectedOrder.paymentStatus === 'Paid';
-                    const resolvedMode = mode || (isPaid ? 'Cash' : 'Pending');
-                    return (
-                      <Chip
-                        label={isPaid ? (resolvedMode === 'GPay' ? '📱 Paid in GPay' : resolvedMode === 'UPI' ? '📱 Paid in UPI' : resolvedMode === 'Cash' ? '💵 Paid in Cash' : `Paid in ${resolvedMode}`) : selectedOrder.paymentStatus}
-                        color={isPaid ? 'success' : 'warning'}
-                        size="small"
-                        sx={{ fontWeight: 800 }}
-                      />
-                    );
+                    return renderPaymentChip(selectedOrder.paymentStatus, latestPayment?.paymentMode, selectedOrder.notes);
                   })()}
                 </Box>
               </Grid>
@@ -585,11 +519,12 @@ const OrdersPage: React.FC = () => {
               <FormControl fullWidth size="small">
                 <InputLabel>Payment Mode</InputLabel>
                 <Select value={newPaymentMode} label="Payment Mode" onChange={(e) => setNewPaymentMode(e.target.value)}>
-                  <MenuItem value="Cash">💵 Paid in Cash</MenuItem>
-                  <MenuItem value="GPay">📱 Paid in GPay (Google Pay)</MenuItem>
+                  <MenuItem value="UPI (Razorpay)">📱 Paid in UPI (Razorpay)</MenuItem>
                   <MenuItem value="UPI">📱 Paid in UPI / QR Code</MenuItem>
+                  <MenuItem value="GPay">📱 Paid in GPay (Google Pay)</MenuItem>
                   <MenuItem value="Online">🌐 Paid Online / NetBanking</MenuItem>
                   <MenuItem value="Card">💳 Paid by Card</MenuItem>
+                  <MenuItem value="Cash">💵 Paid in Cash</MenuItem>
                 </Select>
               </FormControl>
             )}

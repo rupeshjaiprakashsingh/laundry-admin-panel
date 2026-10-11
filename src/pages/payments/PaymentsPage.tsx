@@ -18,13 +18,18 @@ import { getOrders, updatePaymentStatus } from '../../api/orders';
 import { formatCurrency, formatDateTime } from '../../utils/export';
 import type { Order } from '../../types';
 
+import { resolvePaymentInfo, isUpiOrOnlineMode } from '../../utils/paymentUtils';
+
 const modeColors: Record<string, { label: string; color: 'success' | 'secondary' | 'primary' | 'warning' | 'default'; bg?: string; text?: string; border?: string }> = {
-  Cash:    { label: '💵 Paid in Cash', color: 'success', bg: '#ECFDF5', text: '#047857', border: '#A7F3D0' },
-  GPay:    { label: '📱 Paid in GPay', color: 'secondary', bg: '#EEF2FF', text: '#4338CA', border: '#C7D2FE' },
-  UPI:     { label: '📱 Paid in UPI', color: 'secondary', bg: '#F3E8FF', text: '#7E22CE', border: '#E9D5FF' },
-  Online:  { label: '🌐 Paid Online', color: 'primary', bg: '#EFF6FF', text: '#1D4ED8', border: '#BFDBFE' },
-  Card:    { label: '💳 Paid by Card', color: 'primary', bg: '#ECFEFF', text: '#0E7490', border: '#A5F3FC' },
-  Pending: { label: '⏳ Pending', color: 'warning', bg: '#FFFBEB', text: '#B45309', border: '#FDE68A' },
+  Cash:            { label: '💵 Paid in Cash', color: 'success', bg: '#ECFDF5', text: '#047857', border: '#A7F3D0' },
+  'UPI (Razorpay)': { label: '📱 Paid in UPI (Razorpay)', color: 'secondary', bg: '#F3E8FF', text: '#7E22CE', border: '#E9D5FF' },
+  Razorpay:        { label: '📱 Paid in UPI (Razorpay)', color: 'secondary', bg: '#F3E8FF', text: '#7E22CE', border: '#E9D5FF' },
+  GPay:            { label: '📱 Paid in GPay', color: 'secondary', bg: '#EEF2FF', text: '#4338CA', border: '#C7D2FE' },
+  UPI:             { label: '📱 Paid in UPI', color: 'secondary', bg: '#F3E8FF', text: '#7E22CE', border: '#E9D5FF' },
+  Online:          { label: '🌐 Paid Online', color: 'primary', bg: '#EFF6FF', text: '#1D4ED8', border: '#BFDBFE' },
+  Card:            { label: '💳 Paid by Card', color: 'primary', bg: '#ECFEFF', text: '#0E7490', border: '#A5F3FC' },
+  Credits:         { label: '🎁 Paid with Credits', color: 'success', bg: '#ECFDF5', text: '#047857', border: '#A7F3D0' },
+  Pending:         { label: '⏳ Pending', color: 'warning', bg: '#FFFBEB', text: '#B45309', border: '#FDE68A' },
 };
 
 const PaymentsPage: React.FC = () => {
@@ -63,16 +68,7 @@ const PaymentsPage: React.FC = () => {
         ? o.payments[o.payments.length - 1]
         : null;
 
-      let rawMode = latestPayment?.paymentMode;
-      if (!rawMode && o.notes) {
-        const lower = o.notes.toLowerCase();
-        if (lower.includes('gpay') || lower.includes('google pay')) rawMode = 'GPay';
-        else if (lower.includes('upi') || lower.includes('qr')) rawMode = 'UPI';
-        else if (lower.includes('cash') || lower.includes('cod')) rawMode = 'Cash';
-        else if (lower.includes('online')) rawMode = 'Online';
-        else if (lower.includes('card')) rawMode = 'Card';
-      }
-      const isPaid = o.paymentStatus === 'Paid';
+      const { isPaid, resolvedMode } = resolvePaymentInfo(o.paymentStatus, latestPayment?.paymentMode, o.notes);
 
       return {
         id: o.id,
@@ -81,7 +77,7 @@ const PaymentsPage: React.FC = () => {
         customerName: `${o.customer?.firstName ?? ''} ${o.customer?.lastName ?? ''}`.trim() || 'Customer',
         customerPhone: o.customer?.mobileNumber || '',
         paymentStatus: o.paymentStatus || 'Pending',
-        paymentMode: isPaid ? (rawMode || 'Cash') : 'Pending',
+        paymentMode: isPaid ? resolvedMode : 'Pending',
         amount: o.netAmount,
         transactionReference: latestPayment?.transactionReference || '-',
         paidDate: latestPayment?.paidDate || o.createdDate,
@@ -100,7 +96,7 @@ const PaymentsPage: React.FC = () => {
 
   const upiPaid = useMemo(() =>
     allRows
-      .filter((r) => r.paymentStatus === 'Paid' && (r.paymentMode === 'GPay' || r.paymentMode === 'UPI' || r.paymentMode === 'Online' || r.paymentMode === 'Card'))
+      .filter((r) => r.paymentStatus === 'Paid' && isUpiOrOnlineMode(r.paymentMode))
       .reduce((sum, r) => sum + (r.amount || 0), 0), [allRows]);
 
   const pendingCollection = useMemo(() =>
@@ -111,7 +107,7 @@ const PaymentsPage: React.FC = () => {
   // Filtered rows by tab
   const filteredRows = useMemo(() => {
     if (tab === 1) return allRows.filter((r) => r.paymentStatus === 'Paid' && r.paymentMode === 'Cash');
-    if (tab === 2) return allRows.filter((r) => r.paymentStatus === 'Paid' && (r.paymentMode === 'GPay' || r.paymentMode === 'UPI' || r.paymentMode === 'Online' || r.paymentMode === 'Card'));
+    if (tab === 2) return allRows.filter((r) => r.paymentStatus === 'Paid' && isUpiOrOnlineMode(r.paymentMode));
     if (tab === 3) return allRows.filter((r) => r.paymentStatus === 'Pending');
     return allRows;
   }, [allRows, tab]);
@@ -225,7 +221,7 @@ const PaymentsPage: React.FC = () => {
       <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }}>
         <Tab label={`All Transactions (${allRows.length})`} />
         <Tab label={`💵 Paid in Cash (${allRows.filter((r) => r.paymentStatus === 'Paid' && r.paymentMode === 'Cash').length})`} />
-        <Tab label={`📱 Paid in GPay / UPI (${allRows.filter((r) => r.paymentStatus === 'Paid' && (r.paymentMode === 'GPay' || r.paymentMode === 'UPI' || r.paymentMode === 'Online' || r.paymentMode === 'Card')).length})`} />
+        <Tab label={`📱 Paid in GPay / UPI (${allRows.filter((r) => r.paymentStatus === 'Paid' && isUpiOrOnlineMode(r.paymentMode)).length})`} />
         <Tab label={`⏳ Pending (${allRows.filter((r) => r.paymentStatus === 'Pending').length})`} />
       </Tabs>
 
@@ -274,11 +270,12 @@ const PaymentsPage: React.FC = () => {
                   label="Payment Mode"
                   onChange={(e) => setSelectedMode(e.target.value)}
                 >
-                  <MenuItem value="Cash">💵 Paid in Cash</MenuItem>
-                  <MenuItem value="GPay">📱 Paid in GPay (Google Pay)</MenuItem>
+                  <MenuItem value="UPI (Razorpay)">📱 Paid in UPI (Razorpay)</MenuItem>
                   <MenuItem value="UPI">📱 Paid in UPI / QR Code</MenuItem>
+                  <MenuItem value="GPay">📱 Paid in GPay (Google Pay)</MenuItem>
                   <MenuItem value="Online">🌐 Paid Online / NetBanking</MenuItem>
                   <MenuItem value="Card">💳 Paid by Card</MenuItem>
+                  <MenuItem value="Cash">💵 Paid in Cash</MenuItem>
                 </Select>
               </FormControl>
             )}
