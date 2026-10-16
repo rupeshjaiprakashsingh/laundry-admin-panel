@@ -44,6 +44,7 @@ const LaundryShopsPage: React.FC = () => {
   const [detailShopId, setDetailShopId] = useState<number | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<LaundryShop | null>(null);
   const [detailTab, setDetailTab] = useState(0);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const { data: shops = [], isLoading, error } = useQuery({
     queryKey: ['laundry-shops'],
@@ -62,7 +63,17 @@ const LaundryShopsPage: React.FC = () => {
 
   const createMutation = useMutation({
     mutationFn: (data: Partial<LaundryShop>) => createLaundryShop(data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['laundry-shops'] }); setFormOpen(false); setFormData(emptyForm); setEditShop(null); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['laundry-shops'] });
+      setFormOpen(false);
+      setFormData(emptyForm);
+      setEditShop(null);
+      setFormError(null);
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.message || err?.message || 'Failed to create laundry shop';
+      setFormError(Array.isArray(msg) ? msg.join(', ') : msg);
+    },
   });
 
   const updateMutation = useMutation({
@@ -70,7 +81,14 @@ const LaundryShopsPage: React.FC = () => {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['laundry-shops'] });
       qc.invalidateQueries({ queryKey: ['laundry-shop', editShop?.id] });
-      setFormOpen(false); setEditShop(null); setFormData(emptyForm);
+      setFormOpen(false);
+      setEditShop(null);
+      setFormData(emptyForm);
+      setFormError(null);
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.message || err?.message || 'Failed to update laundry shop';
+      setFormError(Array.isArray(msg) ? msg.join(', ') : msg);
     },
   });
 
@@ -87,12 +105,30 @@ const LaundryShopsPage: React.FC = () => {
       (s.pincode ?? '').includes(search)
     ), [shops, search]);
 
-  const handleOpenCreate = () => { setEditShop(null); setFormData(emptyForm); setFormOpen(true); };
-  const handleOpenEdit = (shop: LaundryShop) => { setEditShop(shop); setFormData({ ...shop }); setFormOpen(true); };
-  const handleCloseForm = () => { setFormOpen(false); setEditShop(null); setFormData(emptyForm); };
+  const handleOpenCreate = () => { setEditShop(null); setFormData(emptyForm); setFormError(null); setFormOpen(true); };
+  const handleOpenEdit = (shop: LaundryShop) => { setEditShop(shop); setFormData({ ...shop }); setFormError(null); setFormOpen(true); };
+  const handleCloseForm = () => { setFormOpen(false); setEditShop(null); setFormData(emptyForm); setFormError(null); };
   const handleSubmit = () => {
-    if (editShop) updateMutation.mutate({ id: editShop.id, data: formData });
-    else createMutation.mutate(formData);
+    if (!formData.shopName?.trim()) return;
+    setFormError(null);
+    const cleanedData: Partial<LaundryShop> = {
+      shopName: formData.shopName.trim(),
+      isActive: formData.isActive ?? true,
+    };
+    if (formData.shopCode?.trim()) cleanedData.shopCode = formData.shopCode.trim();
+    if (formData.ownerName?.trim()) cleanedData.ownerName = formData.ownerName.trim();
+    if (formData.contactNumber?.trim()) cleanedData.contactNumber = formData.contactNumber.trim();
+    if (formData.email?.trim()) cleanedData.email = formData.email.trim();
+    if (formData.address?.trim()) cleanedData.address = formData.address.trim();
+    if (formData.city?.trim()) cleanedData.city = formData.city.trim();
+    if (formData.state?.trim()) cleanedData.state = formData.state.trim();
+    if (formData.pincode?.trim()) cleanedData.pincode = formData.pincode.trim();
+    if (formData.capacity != null && !isNaN(Number(formData.capacity))) {
+      cleanedData.capacity = Number(formData.capacity);
+    }
+
+    if (editShop) updateMutation.mutate({ id: editShop.id, data: cleanedData });
+    else createMutation.mutate(cleanedData);
   };
 
   const columns: GridColDef[] = [
@@ -245,13 +281,21 @@ const LaundryShopsPage: React.FC = () => {
           {editShop ? `Edit — ${editShop.shopName}` : '➕ Add New Laundry Shop'}
         </DialogTitle>
         <DialogContent dividers>
+          {formError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {formError}
+            </Alert>
+          )}
           <Grid container spacing={2} sx={{ pt: 1 }}>
-            <Grid size={{ xs: 12, sm: 8 }}>
+            <Grid size={{ xs: 12, sm: 7 }}>
               <TextField fullWidth label="Shop Name *" size="small"
+                placeholder="e.g. Sunrise Laundry"
                 value={formData.shopName ?? ''} onChange={(e) => setFormData({ ...formData, shopName: e.target.value })} />
             </Grid>
-            <Grid size={{ xs: 12, sm: 4 }}>
-              <TextField fullWidth label="Shop Code *" size="small"
+            <Grid size={{ xs: 12, sm: 5 }}>
+              <TextField fullWidth label="Shop Code" size="small"
+                placeholder="Auto-generated if blank"
+                helperText="Optional (e.g. SHOP-1001)"
                 value={formData.shopCode ?? ''} onChange={(e) => setFormData({ ...formData, shopCode: e.target.value })} />
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
@@ -298,7 +342,7 @@ const LaundryShopsPage: React.FC = () => {
           <Button onClick={handleCloseForm}>Cancel</Button>
           <Button
             variant="contained"
-            disabled={!formData.shopName || !formData.shopCode || createMutation.isPending || updateMutation.isPending}
+            disabled={!formData.shopName?.trim() || createMutation.isPending || updateMutation.isPending}
             startIcon={(createMutation.isPending || updateMutation.isPending) ? <CircularProgress size={16} color="inherit" /> : undefined}
             onClick={handleSubmit}
           >

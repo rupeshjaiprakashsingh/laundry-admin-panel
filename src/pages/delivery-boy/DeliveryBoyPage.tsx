@@ -237,16 +237,17 @@ const PickupCard: React.FC<{
   }, [showAddShop]);
 
   const handleCreateShop = async () => {
-    if (!newShopName.trim() || !newShopPincode.trim()) return;
+    if (!newShopName.trim()) return;
     setCreatingShop(true);
     try {
-      const randomCode = 'SHOP-' + Math.floor(1000 + Math.random() * 9000);
-      const res = await createLaundryShop({
+      const payload: any = {
         shopName: newShopName.trim(),
-        shopCode: randomCode,
-        pincode: newShopPincode.trim(),
         isActive: true,
-      });
+      };
+      if (newShopPincode?.trim()) {
+        payload.pincode = newShopPincode.trim();
+      }
+      const res = await createLaundryShop(payload);
 
       const newShop = (res as any)?.data || res;
       const createdId = newShop?.id;
@@ -267,9 +268,10 @@ const PickupCard: React.FC<{
       setShowAddShop(false);
       setNewShopName('');
       setNewShopPincode('');
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to create shop', err);
-      alert('Failed to create laundry shop. Please check details and try again.');
+      const msg = err?.response?.data?.message || 'Failed to create laundry shop. Please check details and try again.';
+      alert(Array.isArray(msg) ? msg.join(', ') : msg);
     } finally {
       setCreatingShop(false);
     }
@@ -1033,7 +1035,7 @@ const PickupCard: React.FC<{
                     <TextField
                       fullWidth
                       size="small"
-                      label="Shop Name"
+                      label="Shop Name *"
                       placeholder="e.g. Ashok Laundry"
                       value={newShopName}
                       onChange={(e) => setNewShopName(e.target.value)}
@@ -1079,7 +1081,7 @@ const PickupCard: React.FC<{
                     <TextField
                       fullWidth
                       size="small"
-                      label="Pincode (6 Digits)"
+                      label="Pincode (Optional)"
                       placeholder="e.g. 400078"
                       value={newShopPincode}
                       onChange={(e) => setNewShopPincode(e.target.value.replace(/\D/g, '').substring(0, 6))}
@@ -1126,7 +1128,7 @@ const PickupCard: React.FC<{
                       fullWidth
                       size="medium"
                       variant="contained"
-                      disabled={creatingShop || !newShopName.trim() || !newShopPincode.trim()}
+                      disabled={creatingShop || !newShopName.trim()}
                       onClick={handleCreateShop}
                       sx={{
                         textTransform: 'none',
