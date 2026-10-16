@@ -173,7 +173,9 @@ const OrdersPage: React.FC = () => {
     const matchStatus = statusFilter === 'All' || o.orderStatus === statusFilter;
     const matchSearch =
       o.orderNumber.toLowerCase().includes(search.toLowerCase()) ||
-      `${o.customer?.firstName} ${o.customer?.lastName}`.toLowerCase().includes(search.toLowerCase());
+      `${o.customer?.firstName} ${o.customer?.lastName}`.toLowerCase().includes(search.toLowerCase()) ||
+      (o.customer?.customerCode || '').toLowerCase().includes(search.toLowerCase()) ||
+      (o.customer?.mobileNumber || '').includes(search);
     return matchStatus && matchSearch;
   }), [orders, search, statusFilter]);
 
@@ -181,7 +183,7 @@ const OrdersPage: React.FC = () => {
     {
       field: 'orderNumber',
       headerName: 'Order #',
-      width: 155,
+      width: 120,
       renderCell: (p) => {
         const isPriority = p.row.orderItems?.some((item: any) =>
           (item.service?.serviceName || '').toLowerCase().includes('priority') ||
@@ -190,14 +192,14 @@ const OrdersPage: React.FC = () => {
 
         return (
           <Box>
-            <Typography sx={{ fontWeight: 700, fontSize: 13 }}>{p.value}</Typography>
+            <Typography sx={{ fontWeight: 700, fontSize: 12.5 }}>{p.value}</Typography>
             {isPriority && (
               <Chip
                 label="⚡ Priority"
                 size="small"
                 sx={{
-                  height: 18,
-                  fontSize: 10,
+                  height: 16,
+                  fontSize: 9.5,
                   fontWeight: 800,
                   bgcolor: '#FFF7ED',
                   color: '#EA580C',
@@ -211,18 +213,62 @@ const OrdersPage: React.FC = () => {
       },
     },
     {
-      field: 'customer', headerName: 'Customer', flex: 1, minWidth: 150,
+      field: 'customerCode',
+      headerName: 'Customer Code',
+      width: 115,
+      valueGetter: (_v: unknown, row: Order) => row.customer?.customerCode || '-',
       renderCell: (p) => (
-        <Box>
-          <Typography sx={{ fontSize: 13, fontWeight: 600 }}>{p.row.customer?.firstName} {p.row.customer?.lastName}</Typography>
-          <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>{p.row.customer?.mobileNumber}</Typography>
+        <Typography
+          sx={{
+            fontWeight: 700,
+            fontSize: 11.5,
+            color: 'primary.main',
+            bgcolor: (t) => t.palette.mode === 'dark' ? 'rgba(99, 102, 241, 0.15)' : '#EEF2FF',
+            border: '1px solid',
+            borderColor: (t) => t.palette.mode === 'dark' ? 'rgba(99, 102, 241, 0.3)' : '#C7D2FE',
+            px: 0.8,
+            py: 0.2,
+            borderRadius: 1,
+            display: 'inline-block',
+            lineHeight: 1.3,
+          }}
+        >
+          {p.value}
+        </Typography>
+      ),
+    },
+    {
+      field: 'customer',
+      headerName: 'Customer',
+      flex: 1,
+      minWidth: 130,
+      renderCell: (p) => (
+        <Box sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <Typography sx={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {p.row.customer?.firstName} {p.row.customer?.lastName}
+          </Typography>
+          <Typography sx={{ fontSize: 11, color: 'text.secondary', lineHeight: 1.2 }}>
+            {p.row.customer?.mobileNumber}
+          </Typography>
         </Box>
       ),
     },
-    { field: 'createdDate', headerName: 'Date', width: 110, renderCell: (p) => formatDate(p.value) },
-    { field: 'orderStatus', headerName: 'Status', width: 165, renderCell: (p) => <Chip label={p.value} color={statusColors[p.value] ?? 'default'} size="small" sx={{ fontWeight: 700 }} /> },
     {
-      field: 'paymentStatus', headerName: 'Payment', width: 195,
+      field: 'createdDate',
+      headerName: 'Date',
+      width: 92,
+      renderCell: (p) => <Typography sx={{ fontSize: 12 }}>{formatDate(p.value)}</Typography>,
+    },
+    {
+      field: 'orderStatus',
+      headerName: 'Status',
+      width: 135,
+      renderCell: (p) => <Chip label={p.value} color={statusColors[p.value] ?? 'default'} size="small" sx={{ fontWeight: 700, fontSize: 11, height: 22 }} />,
+    },
+    {
+      field: 'paymentStatus',
+      headerName: 'Payment',
+      width: 135,
       renderCell: (p) => {
         const row = p.row;
         const latestPayment = row.payments && row.payments.length > 0 ? row.payments[row.payments.length - 1] : null;
@@ -230,26 +276,36 @@ const OrdersPage: React.FC = () => {
       },
     },
     {
-      field: 'laundryShop', headerName: 'Laundry Shop', width: 160,
+      field: 'laundryShop',
+      headerName: 'Laundry Shop',
+      width: 125,
       renderCell: (p) => p.row.laundryShop ? (
         <Chip
-          icon={<StoreIcon sx={{ fontSize: '14px !important' }} />}
+          icon={<StoreIcon sx={{ fontSize: '13px !important' }} />}
           label={p.row.laundryShop.shopName}
           size="small"
           color="primary"
           variant="outlined"
-          sx={{ fontWeight: 600, maxWidth: 150, fontSize: 11 }}
+          sx={{ fontWeight: 600, maxWidth: 115, fontSize: 10.5, height: 22 }}
         />
       ) : (
         <Typography sx={{ fontSize: 11, color: 'text.disabled', fontStyle: 'italic' }}>Not assigned</Typography>
       ),
     },
-    { field: 'netAmount', headerName: 'Amount', width: 110, renderCell: (p) => <Typography sx={{ fontWeight: 700, color: 'success.main' }}>{formatCurrency(p.value)}</Typography> },
     {
-      field: 'actions', headerName: 'Actions', width: 90, sortable: false,
+      field: 'netAmount',
+      headerName: 'Amount',
+      width: 85,
+      renderCell: (p) => <Typography sx={{ fontWeight: 700, fontSize: 12.5, color: 'success.main' }}>{formatCurrency(p.value)}</Typography>,
+    },
+    {
+      field: 'actions',
+      headerName: 'Actions',
+      width: 70,
+      sortable: false,
       renderCell: (p) => (
-        <Stack direction="row">
-          <Tooltip title="View Details"><IconButton size="small" onClick={() => setSelectedOrder(p.row)}><VisibilityIcon fontSize="small" /></IconButton></Tooltip>
+        <Stack direction="row" spacing={0}>
+          <Tooltip title="View Details"><IconButton size="small" onClick={() => setSelectedOrder(p.row)}><VisibilityIcon sx={{ fontSize: 18 }} /></IconButton></Tooltip>
           <Tooltip title="Update Status"><IconButton size="small" onClick={() => {
             setEditOrder(p.row);
             setNewStatus(p.row.orderStatus);
@@ -257,7 +313,7 @@ const OrdersPage: React.FC = () => {
             const lastPayment = p.row.payments && p.row.payments.length > 0 ? p.row.payments[p.row.payments.length - 1] : null;
             const { resolvedMode } = resolvePaymentInfo(p.row.paymentStatus, lastPayment?.paymentMode, p.row.notes);
             setNewPaymentMode(resolvedMode === 'Pending' ? 'Cash' : resolvedMode);
-          }}><EditIcon fontSize="small" /></IconButton></Tooltip>
+          }}><EditIcon sx={{ fontSize: 18 }} /></IconButton></Tooltip>
         </Stack>
       ),
     },
@@ -270,13 +326,32 @@ const OrdersPage: React.FC = () => {
   };
 
   const handleExcelExport = () => exportToExcel(
-    filtered.map((o) => ({ 'Order #': o.orderNumber, Customer: `${o.customer?.firstName} ${o.customer?.lastName}`, Date: formatDate(o.createdDate), Status: o.orderStatus, Payment: getOrderPaymentLabel(o), 'Laundry Shop': o.laundryShop?.shopName ?? 'N/A', Amount: o.netAmount })),
+    filtered.map((o) => ({
+      'Order #': o.orderNumber,
+      'Customer Code': o.customer?.customerCode ?? 'N/A',
+      Customer: `${o.customer?.firstName} ${o.customer?.lastName}`,
+      Date: formatDate(o.createdDate),
+      Status: o.orderStatus,
+      Payment: getOrderPaymentLabel(o),
+      'Laundry Shop': o.laundryShop?.shopName ?? 'N/A',
+      Amount: o.netAmount,
+    })),
     'orders'
   );
 
   const handlePdfExport = () => exportToPDF(
-    'Orders Report', ['Order #', 'Customer', 'Date', 'Status', 'Payment', 'Laundry Shop', 'Amount'],
-    filtered.map((o) => [[o.orderNumber, `${o.customer?.firstName ?? ''} ${o.customer?.lastName ?? ''}`, formatDate(o.createdDate), o.orderStatus, getOrderPaymentLabel(o), o.laundryShop?.shopName ?? 'N/A', formatCurrency(o.netAmount)]]),
+    'Orders Report',
+    ['Order #', 'Customer Code', 'Customer', 'Date', 'Status', 'Payment', 'Laundry Shop', 'Amount'],
+    filtered.map((o) => [[
+      o.orderNumber,
+      o.customer?.customerCode ?? 'N/A',
+      `${o.customer?.firstName ?? ''} ${o.customer?.lastName ?? ''}`,
+      formatDate(o.createdDate),
+      o.orderStatus,
+      getOrderPaymentLabel(o),
+      o.laundryShop?.shopName ?? 'N/A',
+      formatCurrency(o.netAmount),
+    ]]),
     'orders'
   );
 
@@ -350,7 +425,11 @@ const OrdersPage: React.FC = () => {
           getRowId={(row: any) => row.id}
           pageSizeOptions={[10, 25, 50]} disableRowSelectionOnClick={false}
           initialState={{ pagination: { paginationModel: { pageSize: 10 } } }}
-          sx={{ border: 'none', '& .MuiDataGrid-columnHeaders': { fontWeight: 700 } }}
+          sx={{
+            border: 'none',
+            '& .MuiDataGrid-columnHeaders': { fontWeight: 700 },
+            '& .MuiDataGrid-virtualScroller': { overflowX: 'hidden' },
+          }}
         />
       </Card>
 
@@ -361,7 +440,18 @@ const OrdersPage: React.FC = () => {
           {selectedOrder && (
             <Grid container spacing={2}>
               <Grid size={{ xs: 12, sm: 6 }}>
-                <Typography variant="caption" color="text.secondary">Customer</Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Typography variant="caption" color="text.secondary">Customer</Typography>
+                  {selectedOrder.customer?.customerCode && (
+                    <Chip
+                      label={selectedOrder.customer.customerCode}
+                      size="small"
+                      color="primary"
+                      variant="outlined"
+                      sx={{ height: 18, fontSize: 10.5, fontWeight: 700 }}
+                    />
+                  )}
+                </Box>
                 <Typography sx={{ fontWeight: 700 }}>{selectedOrder.customer?.firstName} {selectedOrder.customer?.lastName}</Typography>
                 <Typography variant="body2" color="text.secondary">{selectedOrder.customer?.mobileNumber}</Typography>
                 {(selectedOrder.address || selectedOrder.customer) && (
