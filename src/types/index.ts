@@ -30,6 +30,7 @@ export interface Customer {
   dob?: string;
   isActive: boolean;
   createdDate: string;
+  isServiceable?: boolean;
   addresses?: Address[];
 }
 

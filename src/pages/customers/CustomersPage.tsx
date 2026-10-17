@@ -63,8 +63,8 @@ const CustomersPage: React.FC = () => {
       field: 'isServiceable', headerName: 'Service Area', width: 170,
       renderCell: (p) => (
         <Chip
-          label={p.row.isServiceable === false ? 'Out of Service Area' : 'Serviceable Area'}
-          color={p.row.isServiceable === false ? 'error' : 'success'}
+          label={p.row.isServiceable ? 'Serviceable Area' : 'Out of Service Area'}
+          color={p.row.isServiceable ? 'success' : 'error'}
           size="small"
           sx={{ fontWeight: 700, fontSize: 11 }}
         />
@@ -97,7 +97,7 @@ const CustomersPage: React.FC = () => {
         title="Customer Management"
         subtitle={`${filtered.length} customers`}
         breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Customers' }]}
-        action={{ label: 'Export Excel', icon: <FileDownloadIcon />, onClick: () => exportToExcel(filtered.map((c) => ({ Code: c.customerCode, Name: `${c.firstName} ${c.lastName}`, Mobile: c.mobileNumber, Email: c.email, City: c.city, Pincode: c.pincode, Status: c.isActive ? 'Active' : 'Inactive', Joined: formatDate(c.createdDate) })), 'customers') }}
+        action={{ label: 'Export Excel', icon: <FileDownloadIcon />, onClick: () => exportToExcel(filtered.map((c) => ({ Code: c.customerCode, Name: `${c.firstName} ${c.lastName}`, Mobile: c.mobileNumber, Email: c.email, City: c.city, Pincode: c.pincode, 'Service Area': c.isServiceable ? 'Serviceable Area' : 'Out of Service Area', Status: c.isActive ? 'Active' : 'Inactive', Joined: formatDate(c.createdDate) })), 'customers') }}
       />
 
       <Card sx={{ mb: 2, p: 2 }}>
@@ -139,6 +139,7 @@ const CustomersPage: React.FC = () => {
               {[
                 ['Code', viewCustomer.customerCode], ['Name', `${viewCustomer.firstName} ${viewCustomer.lastName}`],
                 ['Mobile', viewCustomer.mobileNumber], ['Email', viewCustomer.email],
+                ['Service Area', viewCustomer.isServiceable ? 'Serviceable Area' : 'Out of Service Area'],
                 ['Gender', viewCustomer.gender || '-'], ['Date of Birth', viewCustomer.dob || '-'],
                 ['Address', viewCustomer.address || '-'], ['City', viewCustomer.city || '-'],
                 ['State', viewCustomer.state || '-'], ['Pincode', viewCustomer.pincode || '-'],
