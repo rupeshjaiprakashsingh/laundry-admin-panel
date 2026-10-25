@@ -84,7 +84,7 @@ const PricingPage: React.FC = () => {
       const payload: any = {
         serviceId: Number(data.serviceId),
         productId: Number(data.productId),
-        pincode: String(data.pincode || 'DEFAULT').trim(),
+        pincode: String(data.pincode || 'DEFAULT').trim().toUpperCase() || 'DEFAULT',
         price: Number(data.price),
         isActive: data.isActive !== undefined ? data.isActive : true,
       };
@@ -103,7 +103,7 @@ const PricingPage: React.FC = () => {
       const payload: any = {
         serviceId: data.serviceId ? Number(data.serviceId) : undefined,
         productId: data.productId ? Number(data.productId) : undefined,
-        pincode: data.pincode ? String(data.pincode).trim() : undefined,
+        pincode: data.pincode ? String(data.pincode).trim().toUpperCase() : undefined,
         price: data.price !== undefined ? Number(data.price) : undefined,
         isActive: data.isActive !== undefined ? data.isActive : true,
       };
@@ -181,6 +181,30 @@ const PricingPage: React.FC = () => {
       ),
     },
   ];
+
+  const handleSavePriceRule = () => {
+    if (editPrice) {
+      updatePriceMutation.mutate({ id: editPrice.id, data: newPrice });
+      return;
+    }
+
+    const normalizedPin = String(newPrice.pincode || 'DEFAULT').trim().toUpperCase() || 'DEFAULT';
+    const existingRule = prices.find(
+      (p) =>
+        Number(p.serviceId) === Number(newPrice.serviceId) &&
+        Number(p.productId) === Number(newPrice.productId) &&
+        String(p.pincode || 'DEFAULT').trim().toUpperCase() === normalizedPin
+    );
+
+    if (existingRule) {
+      updatePriceMutation.mutate({
+        id: existingRule.id,
+        data: { ...newPrice, pincode: normalizedPin },
+      });
+    } else {
+      createPriceMutation.mutate({ ...newPrice, pincode: normalizedPin });
+    }
+  };
 
   return (
     <Box>
@@ -334,10 +358,7 @@ const PricingPage: React.FC = () => {
           <Button onClick={() => { setPriceFormOpen(false); setEditPrice(null); }}>Cancel</Button>
           <Button variant="contained" disabled={createPriceMutation.isPending || updatePriceMutation.isPending}
             startIcon={(createPriceMutation.isPending || updatePriceMutation.isPending) ? <CircularProgress size={16} color="inherit" /> : undefined}
-            onClick={() => {
-              if (editPrice) updatePriceMutation.mutate({ id: editPrice.id, data: newPrice });
-              else createPriceMutation.mutate(newPrice);
-            }}>
+            onClick={handleSavePriceRule}>
             {editPrice ? 'Update' : 'Create'}
           </Button>
         </DialogActions>

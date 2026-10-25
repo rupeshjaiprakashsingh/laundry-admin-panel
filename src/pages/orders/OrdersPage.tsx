@@ -3,7 +3,7 @@ import {
   Box, Card, CardContent, Chip, Typography, IconButton, Tooltip, Grid,
   TextField, MenuItem, Select, FormControl, InputLabel,
   Dialog, DialogTitle, DialogContent, DialogActions, Button,
-  Table, TableBody, TableCell, TableHead, TableRow, Divider,
+  Table, TableBody, TableCell, TableFooter, TableHead, TableRow, Divider,
   Alert, CircularProgress, Stack, InputAdornment, Badge, Avatar,
   List, ListItemButton, ListItemText, ListItemAvatar,
 } from '@mui/material';
@@ -585,6 +585,39 @@ const OrdersPage: React.FC = () => {
                       </TableRow>
                     ))}
                   </TableBody>
+                  {/* ── Order Items Totals Footer ── */}
+                  <TableFooter>
+                    <TableRow sx={{ bgcolor: 'action.selected' }}>
+                      <TableCell
+                        colSpan={2}
+                        sx={{ fontWeight: 700, fontSize: 13, borderTop: '2px solid', borderColor: 'divider', py: 1 }}
+                      >
+                        🧺 Total Clothes (Types)
+                      </TableCell>
+                      <TableCell
+                        align="right"
+                        colSpan={3}
+                        sx={{ fontWeight: 800, fontSize: 14, borderTop: '2px solid', borderColor: 'divider', color: 'primary.main', py: 1 }}
+                      >
+                        {(selectedOrder.orderItems ?? []).length} item{(selectedOrder.orderItems ?? []).length !== 1 ? 's' : ''}
+                      </TableCell>
+                    </TableRow>
+                    <TableRow sx={{ bgcolor: 'primary.main' }}>
+                      <TableCell
+                        colSpan={2}
+                        sx={{ fontWeight: 700, fontSize: 13, color: 'primary.contrastText', py: 1 }}
+                      >
+                        👕 Total Qty (All Clothes)
+                      </TableCell>
+                      <TableCell
+                        align="right"
+                        colSpan={3}
+                        sx={{ fontWeight: 900, fontSize: 15, color: 'primary.contrastText', py: 1 }}
+                      >
+                        {(selectedOrder.orderItems ?? []).reduce((sum, item) => sum + (item.quantity ?? 0), 0)} pcs
+                      </TableCell>
+                    </TableRow>
+                  </TableFooter>
                 </Table>
               </Grid>
 

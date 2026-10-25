@@ -4,7 +4,6 @@ import {
   Dialog, DialogTitle, DialogContent, DialogActions, TextField,
   Alert, Stack, Switch, FormControlLabel, CircularProgress,
   Tabs, Tab, MenuItem, Select, FormControl, InputLabel, Snackbar,
-  Table, TableBody, TableCell, TableHead, TableRow, Divider,
 } from '@mui/material';
 import { DataGrid, type GridColDef } from '@mui/x-data-grid';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -380,7 +379,7 @@ const PricingTab: React.FC = () => {
 
   const createMutation = useMutation({
     mutationFn: (data: typeof form) => createServicePrice(data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['service-prices'] }); setFormOpen(false); setSnack({ open: true, msg: 'Price created!', severity: 'success' }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['service-prices'] }); setFormOpen(false); setSnack({ open: true, msg: 'Price saved!', severity: 'success' }); },
     onError: (e: any) => setSnack({ open: true, msg: e?.response?.data?.message || 'Create failed — may already exist for this combo', severity: 'error' }),
   });
   const updateMutation = useMutation({
@@ -396,8 +395,36 @@ const PricingTab: React.FC = () => {
 
   const handleSubmit = () => {
     if (!form.serviceId || !form.productId || !form.pincode || form.price <= 0) return;
-    if (editPrice) updateMutation.mutate({ id: editPrice.id, data: { price: form.price, pincode: form.pincode, isActive: form.isActive } });
-    else createMutation.mutate(form);
+    const normalizedPincode = form.pincode.trim().toUpperCase() || 'DEFAULT';
+    if (editPrice) {
+      updateMutation.mutate({
+        id: editPrice.id,
+        data: { price: Number(form.price), pincode: normalizedPincode, isActive: form.isActive },
+      });
+      return;
+    }
+
+    const existingRule = prices.find(
+      (p) =>
+        Number(p.serviceId) === Number(form.serviceId) &&
+        Number(p.productId) === Number(form.productId) &&
+        String(p.pincode || 'DEFAULT').trim().toUpperCase() === normalizedPincode
+    );
+
+    if (existingRule) {
+      updateMutation.mutate({
+        id: existingRule.id,
+        data: { price: Number(form.price), pincode: normalizedPincode, isActive: form.isActive },
+      });
+    } else {
+      createMutation.mutate({
+        ...form,
+        serviceId: Number(form.serviceId),
+        productId: Number(form.productId),
+        pincode: normalizedPincode,
+        price: Number(form.price),
+      });
+    }
   };
 
   const columns: GridColDef[] = [
