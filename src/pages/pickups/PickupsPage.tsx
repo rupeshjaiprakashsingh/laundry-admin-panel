@@ -20,6 +20,17 @@ const STATUS_OPTIONS = ['Pending', 'Assigned', 'Completed', 'Cancelled'];
 const statusColors: Record<string, 'default' | 'warning' | 'info' | 'success' | 'error'> = {
   Pending: 'warning', Assigned: 'info', Completed: 'success', Cancelled: 'error',
 };
+const orderStatusColors: Record<string, 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning'> = {
+  'New Order': 'info',
+  'Pickup Scheduled': 'warning',
+  'Picked Up': 'secondary',
+  Laundry: 'warning',
+  Processing: 'warning',
+  'Ready For Delivery': 'info',
+  'Out For Delivery': 'primary',
+  Delivered: 'success',
+  Cancelled: 'error',
+};
 
 const PickupsPage: React.FC = () => {
   const qc = useQueryClient();
@@ -80,9 +91,9 @@ const PickupsPage: React.FC = () => {
     }), [pickups, search, statusFilter]);
 
   const columns: GridColDef[] = [
-    { field: 'id', headerName: 'Pickup #', width: 90 },
+    { field: 'id', headerName: 'Pickup #', width: 85 },
     {
-      field: 'order', headerName: 'Order #', width: 130,
+      field: 'order', headerName: 'Order #', width: 120,
       renderCell: (p) => p.row.order?.orderNumber ? (
         <Chip
           label={p.row.order.orderNumber}
@@ -94,7 +105,42 @@ const PickupsPage: React.FC = () => {
       ),
     },
     {
-      field: 'customer', headerName: 'Customer', flex: 1, minWidth: 160,
+      field: 'clothesCount',
+      headerName: 'Clothes',
+      width: 105,
+      valueGetter: (_v: unknown, row: any) => {
+        const items = row.order?.orderItems;
+        if (Array.isArray(items) && items.length > 0) {
+          return items.reduce((s: number, i: any) => s + (Number(i.quantity) || 0), 0);
+        }
+        return row.order?.totalClothes || 0;
+      },
+      renderCell: (p) => (
+        <Chip
+          label={`🧺 ${p.value} pcs`}
+          size="small"
+          sx={{ fontWeight: 800, fontSize: 11, bgcolor: '#F3F4F6', color: '#1F2937' }}
+        />
+      ),
+    },
+    {
+      field: 'orderStatus',
+      headerName: 'Order Status',
+      width: 135,
+      valueGetter: (_v: unknown, row: any) => row.order?.orderStatus || '—',
+      renderCell: (p) => p.value !== '—' ? (
+        <Chip
+          label={p.value}
+          color={orderStatusColors[p.value] ?? 'default'}
+          size="small"
+          sx={{ fontWeight: 700, fontSize: 11, height: 22 }}
+        />
+      ) : (
+        <Typography sx={{ fontSize: 11, color: 'text.disabled' }}>—</Typography>
+      ),
+    },
+    {
+      field: 'customer', headerName: 'Customer', flex: 1, minWidth: 150,
       renderCell: (p) => (
         <Box>
           <Typography sx={{ fontSize: 13, fontWeight: 600 }}>{p.value?.firstName} {p.value?.lastName}</Typography>
@@ -102,16 +148,16 @@ const PickupsPage: React.FC = () => {
         </Box>
       ),
     },
-    { field: 'pickupAddress', headerName: 'Address', flex: 1, minWidth: 180, renderCell: (p) => <Typography sx={{ fontSize: 12 }}>{p.value}</Typography> },
-    { field: 'pickupDate', headerName: 'Pickup Date', width: 130, renderCell: (p) => formatDate(p.value) },
-    { field: 'pickupTime', headerName: 'Time', width: 100 },
+    { field: 'pickupAddress', headerName: 'Address', flex: 1, minWidth: 170, renderCell: (p) => <Typography sx={{ fontSize: 12 }}>{p.value}</Typography> },
+    { field: 'pickupDate', headerName: 'Pickup Date', width: 115, renderCell: (p) => formatDate(p.value) },
+    { field: 'pickupTime', headerName: 'Time', width: 95 },
     {
-      field: 'status', headerName: 'Status', width: 130,
+      field: 'status', headerName: 'Pickup Status', width: 125,
       renderCell: (p) => <Chip label={p.value} color={statusColors[p.value] ?? 'default'} size="small" sx={{ fontWeight: 700 }} />,
     },
-    { field: 'assignedEmployee', headerName: 'Assigned To', width: 140, renderCell: (p) => p.value?.fullName ?? <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>Unassigned</Typography> },
+    { field: 'assignedEmployee', headerName: 'Assigned To', width: 135, renderCell: (p) => p.value?.fullName ?? <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>Unassigned</Typography> },
     {
-      field: 'actions', headerName: 'Actions', width: 100, sortable: false,
+      field: 'actions', headerName: 'Actions', width: 90, sortable: false,
       renderCell: (p) => (
         <Stack direction="row">
           <Tooltip title="Assign Employee">

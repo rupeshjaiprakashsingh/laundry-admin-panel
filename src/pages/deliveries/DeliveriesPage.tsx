@@ -237,7 +237,40 @@ const DeliveriesPage: React.FC = () => {
       ),
     },
     {
-      field: 'deliveryStatus', headerName: 'Status', width: 150,
+      field: 'clothesCount',
+      headerName: 'Clothes',
+      width: 100,
+      valueGetter: (_v: unknown, row: any) => {
+        const items = row.order?.orderItems;
+        if (Array.isArray(items) && items.length > 0) {
+          return items.reduce((s: number, i: any) => s + (Number(i.quantity) || 0), 0);
+        }
+        return row.order?.totalClothes || 0;
+      },
+      renderCell: (p) => (
+        <Chip
+          label={`🧺 ${p.value} pcs`}
+          size="small"
+          sx={{ fontWeight: 800, fontSize: 11, bgcolor: '#F3F4F6', color: '#1F2937' }}
+        />
+      ),
+    },
+    {
+      field: 'orderStatus',
+      headerName: 'Order Status',
+      width: 135,
+      valueGetter: (_v: unknown, row: any) => row.order?.orderStatus || '—',
+      renderCell: (p) => (
+        <Chip
+          label={p.value}
+          color={p.value === 'Delivered' ? 'success' : p.value === 'Out For Delivery' ? 'primary' : 'warning'}
+          size="small"
+          sx={{ fontWeight: 700, fontSize: 11, height: 22 }}
+        />
+      ),
+    },
+    {
+      field: 'deliveryStatus', headerName: 'Delivery Status', width: 140,
       renderCell: (p) => <Chip label={p.value} color={deliveryColors[p.value] ?? 'default'} size="small" sx={{ fontWeight: 700 }} />,
     },
     {

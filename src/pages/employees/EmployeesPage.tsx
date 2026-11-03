@@ -52,13 +52,31 @@ const EmployeesPage: React.FC = () => {
   const { data: branches = [] } = useQuery({ queryKey: ['branches'], queryFn: getBranches });
 
   const createMutation = useMutation({
-    mutationFn: (data: CreateForm) => registerEmployee(data),
+    mutationFn: (data: CreateForm) => {
+      const payload = {
+        fullName: data.fullName.trim(),
+        email: data.email.trim(),
+        mobileNumber: data.mobileNumber.trim(),
+        password: data.password,
+        role: data.role,
+        ...(data.branchId && Number(data.branchId) > 0 ? { branchId: Number(data.branchId) } : {}),
+      };
+      return registerEmployee(payload);
+    },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['employees'] }); setCreateOpen(false); reset(); },
   });
 
   const openCreateDialog = (role: 'Employee' | 'DeliveryBoy' = 'Employee') => {
     setDefaultRole(role);
-    reset({ role });
+    createMutation.reset();
+    reset({
+      fullName: '',
+      email: '',
+      mobileNumber: '',
+      password: '',
+      role,
+      branchId: branches[0]?.id ?? undefined,
+    });
     setCreateOpen(true);
   };
   const deleteMutation = useMutation({
@@ -157,6 +175,15 @@ const EmployeesPage: React.FC = () => {
         </DialogTitle>
         <form onSubmit={handleSubmit((data) => createMutation.mutate(data))}>
           <DialogContent>
+            {createMutation.isError && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {(createMutation.error as { response?: { data?: { message?: string | string[] } } })?.response?.data?.message
+                  ? Array.isArray((createMutation.error as { response?: { data?: { message?: string | string[] } } }).response?.data?.message)
+                    ? ((createMutation.error as { response?: { data?: { message?: string[] } } }).response?.data?.message ?? []).join(', ')
+                    : (createMutation.error as { response?: { data?: { message?: string } } }).response?.data?.message
+                  : (createMutation.error as Error)?.message || 'Failed to create employee. Please check the details and try again.'}
+              </Alert>
+            )}
             <Grid container spacing={2} sx={{ mt: 0.5 }}>
               {[
                 { name: 'fullName' as const, label: 'Full Name' },

@@ -14,9 +14,17 @@ export interface CustomerInfo {
 }
 
 export interface OrderItemInfo {
+  id?: number;
+  serviceId?: number;
   clothType: string;
   quantity: number;
-  service?: { serviceName: string };
+  unitPrice?: number;
+  totalPrice?: number;
+  service?: {
+    id?: number;
+    serviceName: string;
+    serviceType?: string;
+  };
 }
 
 export interface LaundryShopInfo {
@@ -32,10 +40,16 @@ export interface LaundryShopInfo {
 export interface OrderInfo {
   id: number;
   orderNumber: string;
+  orderStatus?: string;
   customer: CustomerInfo;
   orderItems?: OrderItemInfo[];
+  totalClothes?: number;
+  totalAmount?: number;
+  discountAmount?: number;
+  taxAmount?: number;
   netAmount?: number;
   paymentStatus?: string;
+  notes?: string | null;
   laundryShop?: LaundryShopInfo;
   addressTitle?: string | null;
   houseDetails?: string | null;
@@ -66,8 +80,15 @@ export interface PickupAssignment {
   order?: {
     id: number;
     orderNumber: string;
+    orderStatus?: string;
+    orderItems?: OrderItemInfo[];
+    totalClothes?: number;
+    totalAmount?: number;
+    discountAmount?: number;
+    taxAmount?: number;
     netAmount?: number;
     paymentStatus?: string;
+    notes?: string | null;
     laundryShop?: LaundryShopInfo;
     addressTitle?: string | null;
     houseDetails?: string | null;
@@ -99,3 +120,10 @@ export const requestDeliveryOtp = (id: number) =>
 
 export const updateMyPickupStatus = (id: number, status: string, laundryShopId?: number) =>
   api.put(`/pickup/${id}/status`, { status, laundryShopId }).then((r) => r.data);
+
+export const verifyOrderItems = (
+  orderId: number,
+  orderItems: Array<{ serviceId: number; clothType: string; quantity: number }>,
+  verificationNotes?: string,
+) =>
+  api.put(`/orders/${orderId}/verify-items`, { orderItems, verificationNotes }).then((r) => r.data);

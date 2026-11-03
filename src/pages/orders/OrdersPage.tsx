@@ -18,8 +18,21 @@ import AssignmentIcon from '@mui/icons-material/Assignment';
 import StoreIcon from '@mui/icons-material/Store';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import DeliveryDiningIcon from '@mui/icons-material/DeliveryDining';
+import ChatIcon from '@mui/icons-material/Chat';
+import SendIcon from '@mui/icons-material/Send';
+import DoneAllIcon from '@mui/icons-material/DoneAll';
+import DoneIcon from '@mui/icons-material/Done';
+import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
 import PageHeader from '../../components/PageHeader';
-import { getOrders, updateOrderStatus, updatePaymentStatus, bulkAssignOrdersToShop } from '../../api/orders';
+import {
+  getOrders,
+  updateOrderStatus,
+  updatePaymentStatus,
+  bulkAssignOrdersToShop,
+  sendCustomerOrderMessage,
+  getOrderMessages,
+  type OrderCommunicationMessage,
+} from '../../api/orders';
 import { getLaundryShops } from '../../api/laundryShops';
 import { getEmployees } from '../../api/employees';
 import { formatCurrency, formatDate, formatDateTime, exportToExcel, exportToPDF } from '../../utils/export';
@@ -75,6 +88,38 @@ const OrdersPage: React.FC = () => {
   const [bulkDeliveryOpen, setBulkDeliveryOpen] = useState(false);
   const [selectedDeliveryBoyId, setSelectedDeliveryBoyId] = useState<number | null>(null);
   const [bulkDeliveryResult, setBulkDeliveryResult] = useState<{ success: number; failed: number } | null>(null);
+
+  // Customer Real-Time Notification & Communication state (Task 4)
+  const [messageOrder, setMessageOrder] = useState<Order | null>(null);
+  const [msgTitle, setMsgTitle] = useState('');
+  const [msgBody, setMsgBody] = useState('');
+  const [msgSuccessBanner, setMsgSuccessBanner] = useState('');
+
+  const openMessageDialog = (order: Order) => {
+    setMessageOrder(order);
+    setMsgTitle(`Update on Order #${order.orderNumber}`);
+    setMsgBody('');
+    setMsgSuccessBanner('');
+  };
+
+  const { data: orderMessages = [], isFetching: loadingMessages, refetch: refetchOrderMessages } = useQuery({
+    queryKey: ['order-messages', messageOrder?.id],
+    queryFn: () => getOrderMessages(messageOrder!.id, messageOrder!.orderNumber),
+    enabled: !!messageOrder?.id,
+    refetchInterval: 4_000,
+    refetchIntervalInBackground: true,
+  });
+
+  const sendMessageMutation = useMutation({
+    mutationFn: (payload: { customerId: number; orderId: number; orderNumber: string; title: string; message: string }) =>
+      sendCustomerOrderMessage(payload),
+    onSuccess: () => {
+      setMsgBody('');
+      setMsgSuccessBanner('Real-time notification sent to customer!');
+      qc.invalidateQueries({ queryKey: ['order-messages', messageOrder?.id] });
+      setTimeout(() => setMsgSuccessBanner(''), 4000);
+    },
+  });
 
   const { data: orders = [], isLoading, error } = useQuery({
     queryKey: ['orders'],
@@ -293,6 +338,24 @@ const OrdersPage: React.FC = () => {
       ),
     },
     {
+      field: 'totalClothes',
+      headerName: 'Clothes',
+      width: 85,
+      valueGetter: (_v: unknown, row: Order) => {
+        if (Array.isArray(row.orderItems) && row.orderItems.length > 0) {
+          return row.orderItems.reduce((s, i) => s + (Number(i.quantity) || 0), 0);
+        }
+        return (row as any).totalClothes || 0;
+      },
+      renderCell: (p) => (
+        <Chip
+          label={`🧺 ${p.value}`}
+          size="small"
+          sx={{ fontWeight: 800, fontSize: 11, height: 21, bgcolor: 'action.hover' }}
+        />
+      ),
+    },
+    {
       field: 'netAmount',
       headerName: 'Amount',
       width: 85,
@@ -301,7 +364,7 @@ const OrdersPage: React.FC = () => {
     {
       field: 'actions',
       headerName: 'Actions',
-      width: 70,
+      width: 105,
       sortable: false,
       renderCell: (p) => (
         <Stack direction="row" spacing={0}>
@@ -314,6 +377,15 @@ const OrdersPage: React.FC = () => {
             const { resolvedMode } = resolvePaymentInfo(p.row.paymentStatus, lastPayment?.paymentMode, p.row.notes);
             setNewPaymentMode(resolvedMode === 'Pending' ? 'Cash' : resolvedMode);
           }}><EditIcon sx={{ fontSize: 18 }} /></IconButton></Tooltip>
+          <Tooltip title="Send Real-Time Notification / Message to Customer">
+            <IconButton
+              size="small"
+              color="primary"
+              onClick={() => openMessageDialog(p.row)}
+            >
+              <ChatIcon sx={{ fontSize: 17 }} />
+            </IconButton>
+          </Tooltip>
         </Stack>
       ),
     },
@@ -714,7 +786,22 @@ const OrdersPage: React.FC = () => {
             </Grid>
           )}
         </DialogContent>
-        <DialogActions><Button onClick={() => setSelectedOrder(null)}>Close</Button></DialogActions>
+        <DialogActions sx={{ justifyContent: 'space-between', px: 3, py: 1.5 }}>
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<NotificationsActiveIcon />}
+            onClick={() => {
+              if (selectedOrder) {
+                openMessageDialog(selectedOrder);
+              }
+            }}
+            sx={{ textTransform: 'none', fontWeight: 700 }}
+          >
+            Message / Notify Customer
+          </Button>
+          <Button onClick={() => setSelectedOrder(null)}>Close</Button>
+        </DialogActions>
       </Dialog>
 
       {/* ---- Edit Status Dialog ---- */}
@@ -906,6 +993,214 @@ const OrdersPage: React.FC = () => {
             }}
           >
             {bulkDeliveryMutation.isPending ? 'Assigning...' : `Assign ${selectedRowIds.ids.size} Order${selectedRowIds.ids.size !== 1 ? 's' : ''}`}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ---- Customer Real-Time Notification & Order Communication Dialog (Task 4) ---- */}
+      <Dialog
+        open={!!messageOrder}
+        onClose={() => !sendMessageMutation.isPending && setMessageOrder(null)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ pb: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Avatar sx={{ bgcolor: 'primary.main', width: 36, height: 36 }}>
+                <NotificationsActiveIcon fontSize="small" />
+              </Avatar>
+              <Box>
+                <Typography sx={{ fontWeight: 800, fontSize: 16 }}>
+                  Notify Customer — Order #{messageOrder?.orderNumber}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {messageOrder?.customer?.firstName} {messageOrder?.customer?.lastName} ({messageOrder?.customer?.mobileNumber})
+                </Typography>
+              </Box>
+            </Box>
+            {messageOrder && (
+              <Chip
+                label={messageOrder.orderStatus}
+                color={statusColors[messageOrder.orderStatus] ?? 'default'}
+                size="small"
+                sx={{ fontWeight: 700 }}
+              />
+            )}
+          </Box>
+        </DialogTitle>
+
+        <DialogContent dividers>
+          {msgSuccessBanner && (
+            <Alert severity="success" sx={{ mb: 2, fontWeight: 700 }}>
+              {msgSuccessBanner}
+            </Alert>
+          )}
+          {sendMessageMutation.isError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {(sendMessageMutation.error as any)?.response?.data?.message || 'Failed to send notification'}
+            </Alert>
+          )}
+
+          {/* Quick Message Templates */}
+          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, display: 'block', mb: 0.75 }}>
+            ⚡ Quick Notification Templates (Click to fill):
+          </Typography>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, mb: 2 }}>
+            {[
+              {
+                label: '🧺 Clothes Verified',
+                title: `Clothes Verified — Order #${messageOrder?.orderNumber}`,
+                body: `Hello ${messageOrder?.customer?.firstName || 'Customer'}, we have counted and verified the clothes for your Order #${messageOrder?.orderNumber}. Thank you for choosing Grivana!`,
+              },
+              {
+                label: '🧼 In Laundry Processing',
+                title: `Order #${messageOrder?.orderNumber} is in Laundry`,
+                body: `Hello ${messageOrder?.customer?.firstName || 'Customer'}, your clothes for Order #${messageOrder?.orderNumber} are now in Laundry processing and being cared for by our specialists.`,
+              },
+              {
+                label: '🚚 Ready / Out For Delivery Soon',
+                title: `Delivery Update — Order #${messageOrder?.orderNumber}`,
+                body: `Great news! Your Order #${messageOrder?.orderNumber} is ready and will be out for delivery soon. Please be available at your delivery address.`,
+              },
+              {
+                label: '📞 Special Care / Action Needed',
+                title: `Important Update — Order #${messageOrder?.orderNumber}`,
+                body: `Hello ${messageOrder?.customer?.firstName || 'Customer'}, we have an important update regarding the clothes in your Order #${messageOrder?.orderNumber}. Please check your order details in the app.`,
+              },
+              {
+                label: '💳 Payment Reminder',
+                title: `Payment Reminder — Order #${messageOrder?.orderNumber}`,
+                body: `Gentle reminder: Payment of ${formatCurrency(messageOrder?.netAmount || 0)} for Order #${messageOrder?.orderNumber} is pending. You can pay online in the app or via UPI/Cash on delivery.`,
+              },
+            ].map((tpl) => (
+              <Chip
+                key={tpl.label}
+                label={tpl.label}
+                size="small"
+                clickable
+                onClick={() => {
+                  setMsgTitle(tpl.title);
+                  setMsgBody(tpl.body);
+                }}
+                sx={{
+                  fontWeight: 700,
+                  fontSize: 11.5,
+                  bgcolor: 'action.hover',
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  '&:hover': { bgcolor: 'primary.main', color: 'primary.contrastText' },
+                }}
+              />
+            ))}
+          </Box>
+
+          <Stack spacing={1.5} sx={{ mb: 2.5 }}>
+            <TextField
+              label="Notification Title"
+              size="small"
+              fullWidth
+              value={msgTitle}
+              onChange={(e) => setMsgTitle(e.target.value)}
+              placeholder="e.g. Update on Order #ORD-00560"
+            />
+            <TextField
+              label="Message to Customer *"
+              size="small"
+              fullWidth
+              multiline
+              minRows={3}
+              value={msgBody}
+              onChange={(e) => setMsgBody(e.target.value)}
+              placeholder="Type your real-time message to the customer here..."
+            />
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <Button
+                variant="contained"
+                startIcon={sendMessageMutation.isPending ? <CircularProgress size={16} color="inherit" /> : <SendIcon />}
+                disabled={!msgBody.trim() || sendMessageMutation.isPending || !messageOrder}
+                onClick={() => {
+                  if (!messageOrder) return;
+                  sendMessageMutation.mutate({
+                    customerId: messageOrder.customerId || (messageOrder.customer as any)?.id,
+                    orderId: messageOrder.id,
+                    orderNumber: messageOrder.orderNumber,
+                    title: msgTitle.trim() || `Update on Order #${messageOrder.orderNumber}`,
+                    message: msgBody.trim(),
+                  });
+                }}
+                sx={{ textTransform: 'none', fontWeight: 800, borderRadius: 2 }}
+              >
+                {sendMessageMutation.isPending ? 'Sending...' : 'Send Real-Time Notification'}
+              </Button>
+            </Box>
+          </Stack>
+
+          <Divider sx={{ my: 1.5 }} />
+
+          {/* Live Message History & Customer Read Receipts */}
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+            <Typography sx={{ fontWeight: 800, fontSize: 13.5 }}>
+              📬 Message History & Read Status ({orderMessages.length})
+            </Typography>
+            <Button size="small" onClick={() => refetchOrderMessages()} sx={{ textTransform: 'none', fontSize: 11 }}>
+              {loadingMessages ? 'Syncing...' : '↻ Refresh Status'}
+            </Button>
+          </Box>
+
+          {orderMessages.length === 0 ? (
+            <Box sx={{ py: 3, textAlign: 'center', bgcolor: 'action.hover', borderRadius: 2 }}>
+              <Typography variant="body2" color="text.secondary">
+                No notifications sent for Order #{messageOrder?.orderNumber} yet.
+              </Typography>
+            </Box>
+          ) : (
+            <Stack spacing={1.25} sx={{ maxHeight: 260, overflowY: 'auto', pr: 0.5 }}>
+              {orderMessages.map((m: OrderCommunicationMessage) => (
+                <Box
+                  key={m.id}
+                  sx={{
+                    p: 1.5,
+                    borderRadius: 2,
+                    border: '1px solid',
+                    borderColor: m.isRead ? 'success.light' : 'warning.light',
+                    bgcolor: m.isRead ? 'rgba(16, 185, 129, 0.06)' : 'rgba(245, 158, 11, 0.06)',
+                  }}
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, mb: 0.5 }}>
+                    <Typography sx={{ fontWeight: 800, fontSize: 13 }}>
+                      {m.title || `Order #${messageOrder?.orderNumber} Update`}
+                    </Typography>
+                    <Chip
+                      icon={m.isRead ? <DoneAllIcon sx={{ fontSize: '14px !important' }} /> : <DoneIcon sx={{ fontSize: '14px !important' }} />}
+                      label={m.isRead ? 'Read by Customer' : 'Sent (Unread)'}
+                      color={m.isRead ? 'success' : 'warning'}
+                      size="small"
+                      sx={{ height: 22, fontSize: 10.5, fontWeight: 800 }}
+                    />
+                  </Box>
+                  <Typography variant="body2" sx={{ fontSize: 12.5, mb: 0.75, whiteSpace: 'pre-line' }}>
+                    {m.message}
+                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: 11 }}>
+                      Sent: {formatDateTime(m.sentDate)}
+                    </Typography>
+                    {m.isRead && m.readAt && (
+                      <Typography variant="caption" sx={{ fontSize: 11, fontWeight: 700, color: 'success.main' }}>
+                        ✓✓ Read at {formatDateTime(m.readAt)}
+                      </Typography>
+                    )}
+                  </Box>
+                </Box>
+              ))}
+            </Stack>
+          )}
+        </DialogContent>
+
+        <DialogActions>
+          <Button onClick={() => setMessageOrder(null)} sx={{ textTransform: 'none', fontWeight: 700 }}>
+            Close
           </Button>
         </DialogActions>
       </Dialog>

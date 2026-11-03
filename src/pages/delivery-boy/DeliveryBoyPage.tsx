@@ -38,6 +38,13 @@ import ClearIcon from '@mui/icons-material/Clear';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
 import StorefrontIcon from '@mui/icons-material/Storefront';
+import EditNoteIcon from '@mui/icons-material/EditNote';
+import AddCircleOutlineIcon from '@mui/icons-material/Add';
+import DeleteOutlineIcon from '@mui/icons-material/Delete';
+import CheckBoxIcon from '@mui/icons-material/CheckBox';
+import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
+import FactCheckIcon from '@mui/icons-material/FactCheck';
+import api from '../../api/axios';
 
 import {
   getMyDeliveries,
@@ -45,8 +52,10 @@ import {
   updateMyDeliveryStatus,
   updateMyPickupStatus,
   requestDeliveryOtp,
+  verifyOrderItems,
   type DeliveryAssignment,
   type PickupAssignment,
+  type OrderItemInfo,
 } from '../../api/deliveryBoy';
 import { logout } from '../../app/authSlice';
 import { useAuth } from '../../hooks/useAuth';
@@ -192,16 +201,166 @@ const deliveryStatusConfig: Record<string, { color: string; bg: string; label: s
   Failed:         { color: '#991B1B', bg: '#FEE2E2',  label: 'Failed' },
 };
 
+const orderStatusBadgeConfig: Record<string, { color: string; bg: string; border: string; label: string }> = {
+  'New Order':          { color: '#1E40AF', bg: '#DBEAFE', border: '#93C5FD', label: 'New Order' },
+  'Pickup Scheduled':   { color: '#92400E', bg: '#FEF3C7', border: '#FDE68A', label: 'Pickup Scheduled' },
+  'Picked Up':          { color: '#5B21B6', bg: '#EDE9FE', border: '#C4B5FD', label: 'Picked Up' },
+  'Laundry':            { color: '#B45309', bg: '#FFFBEB', border: '#F59E0B', label: '🧺 In Laundry' },
+  'Processing':         { color: '#B45309', bg: '#FFFBEB', border: '#F59E0B', label: 'Processing' },
+  'Ready For Delivery': { color: '#0369A1', bg: '#E0F2FE', border: '#7DD3FC', label: 'Ready For Delivery' },
+  'Out For Delivery':   { color: '#1D4ED8', bg: '#DBEAFE', border: '#93C5FD', label: 'Out For Delivery' },
+  'Delivered':          { color: '#065F46', bg: '#D1FAE5', border: '#6EE7B7', label: 'Delivered ✓' },
+  'Cancelled':          { color: '#991B1B', bg: '#FEE2E2', border: '#FCA5A5', label: 'Cancelled' },
+};
+
+const DEFAULT_GARMENT_TYPES = [
+  'Shirt',
+  'T-Shirt',
+  'Pant',
+  'Trouser',
+  'Jeans',
+  'Suit',
+  'Suit (2 Pc)',
+  'Suit (3 Pc)',
+  'Blazer',
+  'Coat',
+  'Kurta',
+  'Pajama',
+  'Saree',
+  'Blouse',
+  'Dupatta',
+  'Dress',
+  'Gown',
+  'Lehenga',
+  'Skirt',
+  'Top',
+  'Shorts',
+  'Track Pant',
+  'Jacket',
+  'Sweater',
+  'Hoodie',
+  'Bedsheet (Single)',
+  'Bedsheet (Double)',
+  'Pillow Cover',
+  'Blanket',
+  'Quilt',
+  'Curtain',
+  'Towel',
+];
+
+function getTotalClothesCount(order?: { orderItems?: OrderItemInfo[]; totalClothes?: number } | null): number {
+  if (!order) return 0;
+  if (Array.isArray(order.orderItems) && order.orderItems.length > 0) {
+    return order.orderItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+  }
+  return Number(order.totalClothes) || 0;
+}
+
 // ── Pickup Card ──────────────────────────────────────────────────────────────
+
+interface EditableGarmentRow {
+  clothType: string;
+  serviceId: number;
+  quantity: number;
+  checked: boolean;
+}
 
 const PickupCard: React.FC<{
   pickup: PickupAssignment;
   laundryShops: any[];
+  services: any[];
+  garmentCatalog: string[];
   onAction: (id: number, status: string, laundryShopId?: number) => void;
+  onClothesVerified: (msg: string) => void;
   isLoading: boolean;
-}> = ({ pickup, laundryShops: rawLaundryShops, onAction, isLoading }) => {
+}> = ({ pickup, laundryShops: rawLaundryShops, services, garmentCatalog, onAction, onClothesVerified, isLoading }) => {
   const [expanded, setExpanded] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<{ status: string; label: string } | null>(null);
+  const [verifyOpen, setVerifyOpen] = useState(false);
+  const [editableItems, setEditableItems] = useState<EditableGarmentRow[]>([]);
+  const [verificationNotes, setVerificationNotes] = useState('');
+  const [savingClothes, setSavingClothes] = useState(false);
+  const [clothesApprovedInSession, setClothesApprovedInSession] = useState(false);
+
+  const defaultServiceId = useMemo(() => {
+    const firstOrderServiceId = pickup.order?.orderItems?.[0]?.serviceId || pickup.order?.orderItems?.[0]?.service?.id;
+    if (firstOrderServiceId) return Number(firstOrderServiceId);
+    if (services && services.length > 0) return Number(services[0].id);
+    return 1;
+  }, [pickup.order, services]);
+
+  const openVerifyModal = useCallback(() => {
+    const existing = pickup.order?.orderItems || [];
+    if (existing.length > 0) {
+      setEditableItems(
+        existing.map((item) => ({
+          clothType: item.clothType || 'Shirt',
+          serviceId: Number(item.serviceId || item.service?.id || defaultServiceId),
+          quantity: Math.max(1, Number(item.quantity) || 1),
+          checked: true,
+        }))
+      );
+    } else {
+      setEditableItems([
+        {
+          clothType: 'Shirt',
+          serviceId: defaultServiceId,
+          quantity: 1,
+          checked: true,
+        },
+      ]);
+    }
+    setVerifyOpen(true);
+  }, [pickup.order, defaultServiceId]);
+
+  const handleSaveVerifiedClothes = async () => {
+    if (!pickup.order?.id) return;
+    const validItems = editableItems
+      .filter((r) => r.clothType.trim() && r.quantity > 0)
+      .map((r) => ({
+        clothType: r.clothType.trim(),
+        serviceId: Number(r.serviceId || defaultServiceId),
+        quantity: Number(r.quantity),
+      }));
+
+    if (validItems.length === 0) {
+      alert('Please keep at least 1 garment in the order.');
+      return;
+    }
+
+    setSavingClothes(true);
+    try {
+      const updatedOrder = await verifyOrderItems(
+        pickup.order.id,
+        validItems,
+        verificationNotes.trim() || undefined,
+      );
+      setClothesApprovedInSession(true);
+      setVerifyOpen(false);
+      await qc.invalidateQueries({ queryKey: ['my-pickups'] });
+      await qc.invalidateQueries({ queryKey: ['my-deliveries'] });
+      await qc.invalidateQueries({ queryKey: ['orders'] });
+      await qc.invalidateQueries({ queryKey: ['pickups'] });
+      const totalPcs = validItems.reduce((s, i) => s + i.quantity, 0);
+      const newNet = updatedOrder?.netAmount !== undefined ? ` (₹${Number(updatedOrder.netAmount).toFixed(2)})` : '';
+      onClothesVerified(`✅ Clothes verified & approved! Total: ${totalPcs} clothes${newNet}`);
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || 'Failed to update clothes. Please try again.';
+      alert(Array.isArray(msg) ? msg.join(', ') : msg);
+    } finally {
+      setSavingClothes(false);
+    }
+  };
+
+  const totalClothesCount = useMemo(() => getTotalClothesCount(pickup.order), [pickup.order]);
+  const orderStatusCfg = pickup.order?.orderStatus
+    ? (orderStatusBadgeConfig[pickup.order.orderStatus] || {
+        color: '#374151',
+        bg: '#F3F4F6',
+        border: '#D1D5DB',
+        label: pickup.order.orderStatus,
+      })
+    : null;
 
   // Normalize laundryShops to guaranteed array
   const laundryShops = useMemo(() => {
@@ -393,12 +552,14 @@ const PickupCard: React.FC<{
 
           {/* Customer Info */}
           <Box sx={{ px: 2, pt: 1.5, pb: 0.5 }}>
-            {/* Prominent Order No Badge */}
+            {/* Prominent Order No + Order Status + Total Clothes Badge */}
             <Box
               sx={{
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: 0.75,
                 px: 1.5,
                 py: 1,
                 mb: 1.5,
@@ -410,17 +571,39 @@ const PickupCard: React.FC<{
             >
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
                 <Typography sx={{ fontSize: 12, fontWeight: 800, color: '#312E81' }}>
-                  📦 Order No:
+                  📦 Order:
                 </Typography>
                 <Typography sx={{ fontSize: 14, fontWeight: 900, color: '#4F46E5', letterSpacing: '0.5px' }}>
                   {pickup.order?.orderNumber || (pickup as any).orderNumber || `ORD-${String(pickup.id).padStart(5, '0')}`}
                 </Typography>
               </Box>
-              <Chip
-                label={pickup.order?.orderNumber ? 'Linked Order' : `Pickup #${pickup.id}`}
-                size="small"
-                sx={{ height: 20, fontSize: 10, fontWeight: 800, bgcolor: '#E0E7FF', color: '#4338CA' }}
-              />
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6, flexWrap: 'wrap' }}>
+                {orderStatusCfg && (
+                  <Chip
+                    label={orderStatusCfg.label}
+                    size="small"
+                    sx={{
+                      height: 22,
+                      fontSize: 10.5,
+                      fontWeight: 800,
+                      bgcolor: orderStatusCfg.bg,
+                      color: orderStatusCfg.color,
+                      border: `1px solid ${orderStatusCfg.border}`,
+                    }}
+                  />
+                )}
+                <Chip
+                  label={`🧺 ${totalClothesCount} ${totalClothesCount === 1 ? 'Cloth' : 'Clothes'}`}
+                  size="small"
+                  sx={{
+                    height: 22,
+                    fontSize: 11,
+                    fontWeight: 900,
+                    bgcolor: '#4F46E5',
+                    color: '#FFFFFF',
+                  }}
+                />
+              </Box>
             </Box>
 
             <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 1 }}>
@@ -455,6 +638,121 @@ const PickupCard: React.FC<{
                 </Box>
               </Box>
             </Box>
+
+            {/* ── Clothes Count, Garment List & Live Fix/Approve Section ── */}
+            {pickup.order && (
+              <Box
+                sx={{
+                  mt: 1,
+                  mb: 1.25,
+                  p: 1.5,
+                  bgcolor: '#F8FAFC',
+                  borderRadius: 2.5,
+                  border: clothesApprovedInSession ? '1.5px solid #10B981' : '1.5px solid #CBD5E1',
+                }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                    <Typography sx={{ fontSize: 11.5, fontWeight: 900, color: '#1E293B', textTransform: 'uppercase', letterSpacing: 0.4 }}>
+                      🧺 Clothes in Order ({totalClothesCount} pcs)
+                    </Typography>
+                    {(clothesApprovedInSession || (pickup.order.notes && pickup.order.notes.includes('[Verified:'))) && (
+                      <Chip
+                        label="Verified ✓"
+                        size="small"
+                        sx={{
+                          height: 18,
+                          fontSize: 9.5,
+                          fontWeight: 800,
+                          bgcolor: '#DCFCE7',
+                          color: '#15803D',
+                          border: '1px solid #86EFAC',
+                        }}
+                      />
+                    )}
+                  </Box>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    startIcon={<EditNoteIcon sx={{ fontSize: '15px !important' }} />}
+                    onClick={openVerifyModal}
+                    sx={{
+                      textTransform: 'none',
+                      fontWeight: 800,
+                      fontSize: 11,
+                      py: 0.4,
+                      px: 1.2,
+                      borderRadius: 1.5,
+                      bgcolor: '#4F46E5',
+                      color: '#fff',
+                      boxShadow: '0 1px 4px rgba(79, 70, 229, 0.25)',
+                      '&:hover': { bgcolor: '#4338CA' },
+                    }}
+                  >
+                    Count / Fix Clothes
+                  </Button>
+                </Box>
+
+                {pickup.order.orderItems && pickup.order.orderItems.length > 0 ? (
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.6 }}>
+                    {pickup.order.orderItems.map((item, idx) => (
+                      <Box
+                        key={item.id || idx}
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          px: 1.25,
+                          py: 0.75,
+                          bgcolor: '#FFFFFF',
+                          borderRadius: 1.5,
+                          border: '1px solid #E2E8F0',
+                        }}
+                      >
+                        <Box sx={{ minWidth: 0, flex: 1 }}>
+                          <Typography sx={{ fontSize: 13, fontWeight: 800, color: '#0F172A', lineHeight: 1.2 }}>
+                            {idx + 1}. {item.clothType}
+                          </Typography>
+                          {item.service?.serviceName && (
+                            <Typography sx={{ fontSize: 11, fontWeight: 600, color: '#6366F1' }}>
+                              {item.service.serviceName}
+                              {item.unitPrice !== undefined ? ` • ₹${Number(item.unitPrice).toFixed(0)}/pc` : ''}
+                            </Typography>
+                          )}
+                        </Box>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Chip
+                            label={`Qty: ${item.quantity}`}
+                            size="small"
+                            sx={{
+                              height: 22,
+                              fontSize: 11.5,
+                              fontWeight: 900,
+                              bgcolor: '#EEF2FF',
+                              color: '#3730A3',
+                              border: '1px solid #C7D2FE',
+                            }}
+                          />
+                          {item.totalPrice !== undefined && (
+                            <Typography sx={{ fontSize: 12, fontWeight: 800, color: '#047857', minWidth: 48, textAlign: 'right' }}>
+                              ₹{Number(item.totalPrice).toFixed(0)}
+                            </Typography>
+                          )}
+                        </Box>
+                      </Box>
+                    ))}
+                  </Box>
+                ) : (
+                  <Typography sx={{ fontSize: 12, color: '#64748B', fontStyle: 'italic' }}>
+                    No clothes listed yet. Tap "Count / Fix Clothes" to add garments collected from the customer.
+                  </Typography>
+                )}
+
+                <Typography sx={{ fontSize: 10.5, color: '#475569', mt: 0.85, fontWeight: 600 }}>
+                  💡 Customer gave different clothes (e.g. Shirt instead of T-Shirt, or Pant + Shirt instead of Suit)? Tap <strong>Count / Fix Clothes</strong> to edit & approve!
+                </Typography>
+              </Box>
+            )}
 
             {/* Payment Details */}
             {pickup.order && (
@@ -707,6 +1005,46 @@ const PickupCard: React.FC<{
 
           {confirmDialog?.status === 'Completed' && (
             <Box sx={{ mt: 1.5 }}>
+              {/* Quick Clothes Verification Summary inside Pickup Confirmation */}
+              {pickup.order && (
+                <Box
+                  sx={{
+                    p: 1.25,
+                    mb: 1.5,
+                    bgcolor: clothesApprovedInSession ? '#ECFDF5' : '#F8FAFC',
+                    borderRadius: 2,
+                    border: clothesApprovedInSession ? '1.5px solid #10B981' : '1.5px solid #CBD5E1',
+                  }}
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
+                    <Typography sx={{ fontSize: 12, fontWeight: 800, color: '#0F172A !important' }}>
+                      🧺 Clothes Count: {totalClothesCount} pcs
+                    </Typography>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={openVerifyModal}
+                      sx={{
+                        textTransform: 'none',
+                        fontSize: 11,
+                        fontWeight: 800,
+                        py: 0.2,
+                        px: 1,
+                        borderRadius: 1.5,
+                        borderColor: '#4F46E5',
+                        color: '#4F46E5 !important',
+                      }}
+                    >
+                      ✏️ Fix / Approve Clothes
+                    </Button>
+                  </Box>
+                  {pickup.order.orderItems && pickup.order.orderItems.length > 0 && (
+                    <Typography sx={{ fontSize: 11.5, color: '#334155 !important', fontWeight: 600 }}>
+                      {pickup.order.orderItems.map((i) => `${i.clothType} (${i.service?.serviceName || 'Service'}) ×${i.quantity}`).join(' • ')}
+                    </Typography>
+                  )}
+                </Box>
+              )}
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
                 <Typography variant="body2" sx={{ fontWeight: 800, color: '#1E293B !important', fontSize: 13 }}>
                   Select Laundry Shop to drop clothes:
@@ -1229,6 +1567,328 @@ const PickupCard: React.FC<{
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* ── Verify, Edit & Approve Clothes Dialog (Task 1) ── */}
+      <Dialog
+        open={verifyOpen}
+        onClose={() => !savingClothes && setVerifyOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        scroll="paper"
+        slotProps={{
+          paper: {
+            sx: {
+              borderRadius: 3,
+              bgcolor: '#FFFFFF !important',
+              color: '#0F172A !important',
+              m: { xs: 1, sm: 2 },
+              maxHeight: 'calc(100% - 24px)',
+            },
+          },
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: 900, pb: 1, color: '#0F172A !important', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <FactCheckIcon sx={{ color: '#4F46E5' }} />
+            <Box>
+              <Typography sx={{ fontWeight: 900, fontSize: 15, color: '#0F172A !important', lineHeight: 1.2 }}>
+                Verify & Approve Clothes
+              </Typography>
+              <Typography sx={{ fontSize: 11.5, color: '#475569 !important', fontWeight: 600 }}>
+                Order #{pickup.order?.orderNumber} • {pickup.customer.firstName} {pickup.customer.lastName}
+              </Typography>
+            </Box>
+          </Box>
+          <Chip
+            label={`🧺 ${editableItems.reduce((s, r) => s + (Number(r.quantity) || 0), 0)} pcs`}
+            size="small"
+            sx={{ bgcolor: '#4F46E5 !important', color: '#FFFFFF !important', fontWeight: 900, fontSize: 12 }}
+          />
+        </DialogTitle>
+
+        <DialogContent dividers sx={{ px: { xs: 1.5, sm: 2.5 }, py: 2, bgcolor: '#F8FAFC !important' }}>
+          <Typography sx={{ fontSize: 12, color: '#334155 !important', mb: 1.5, fontWeight: 600, lineHeight: 1.4 }}>
+            Count the clothes handed over by the customer. You can change any garment type (e.g. <strong>T-Shirt → Shirt</strong>), split a <strong>Suit → Pant + Shirt</strong>, adjust quantities, or add/remove items before approving.
+          </Typography>
+
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+            {editableItems.map((row, idx) => {
+              const isSuit = row.clothType.toLowerCase().includes('suit');
+              return (
+                <Box
+                  key={idx}
+                  sx={{
+                    p: 1.25,
+                    borderRadius: 2,
+                    bgcolor: '#FFFFFF !important',
+                    border: row.checked ? '1.5px solid #4F46E5' : '1px solid #CBD5E1',
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                  }}
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                    <Box
+                      onClick={() =>
+                        setEditableItems((prev) =>
+                          prev.map((item, i) => (i === idx ? { ...item, checked: !item.checked } : item))
+                        )
+                      }
+                      sx={{ display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'pointer' }}
+                    >
+                      {row.checked ? (
+                        <CheckBoxIcon sx={{ color: '#10B981', fontSize: 20 }} />
+                      ) : (
+                        <CheckBoxOutlineBlankIcon sx={{ color: '#94A3B8', fontSize: 20 }} />
+                      )}
+                      <Typography sx={{ fontSize: 12, fontWeight: 800, color: '#1E293B !important' }}>
+                        Garment #{idx + 1} {row.checked ? '(Checked ✓)' : '(Tap to check)'}
+                      </Typography>
+                    </Box>
+
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      {isSuit && (
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          onClick={() => {
+                            // Replace Suit with Pant + Shirt of same service & quantity
+                            setEditableItems((prev) => {
+                              const next = [...prev];
+                              next.splice(
+                                idx,
+                                1,
+                                { clothType: 'Pant', serviceId: row.serviceId, quantity: row.quantity, checked: true },
+                                { clothType: 'Shirt', serviceId: row.serviceId, quantity: row.quantity, checked: true },
+                              );
+                              return next;
+                            });
+                          }}
+                          sx={{
+                            textTransform: 'none',
+                            fontSize: 10.5,
+                            fontWeight: 800,
+                            py: 0.2,
+                            px: 0.8,
+                            borderRadius: 1,
+                            borderColor: '#F59E0B',
+                            color: '#B45309 !important',
+                            bgcolor: '#FFFBEB',
+                          }}
+                        >
+                          ⇄ Split to Pant + Shirt
+                        </Button>
+                      )}
+                      <IconButton
+                        size="small"
+                        color="error"
+                        disabled={editableItems.length <= 1}
+                        onClick={() =>
+                          setEditableItems((prev) => prev.filter((_, i) => i !== idx))
+                        }
+                        title="Remove item"
+                      >
+                        <DeleteOutlineIcon sx={{ fontSize: 18 }} />
+                      </IconButton>
+                    </Box>
+                  </Box>
+
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                    {/* Cloth / Garment Type Selector (Autocomplete freeSolo so any cloth can be picked or typed) */}
+                    <Autocomplete
+                      freeSolo
+                      size="small"
+                      options={garmentCatalog}
+                      value={row.clothType}
+                      onChange={(_e, newVal) => {
+                        setEditableItems((prev) =>
+                          prev.map((item, i) => (i === idx ? { ...item, clothType: newVal || '' } : item))
+                        );
+                      }}
+                      onInputChange={(_e, newInputVal) => {
+                        setEditableItems((prev) =>
+                          prev.map((item, i) => (i === idx ? { ...item, clothType: newInputVal || '' } : item))
+                        );
+                      }}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          label="Cloth / Garment Type"
+                          placeholder="e.g. Shirt, T-Shirt, Pant, Suit"
+                          sx={{
+                            '& .MuiInputBase-root': { bgcolor: '#FFFFFF !important', color: '#0F172A !important', fontWeight: 700, fontSize: 13 },
+                            '& .MuiInputBase-input': { color: '#0F172A !important', WebkitTextFillColor: '#0F172A !important' },
+                            '& .MuiInputLabel-root': { color: '#475569 !important', fontWeight: 700 },
+                          }}
+                        />
+                      )}
+                    />
+
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      {/* Service Selector */}
+                      <FormControl size="small" sx={{ flex: 1 }}>
+                        <InputLabel sx={{ color: '#475569 !important', fontWeight: 700 }}>Service</InputLabel>
+                        <Select
+                          label="Service"
+                          value={row.serviceId}
+                          onChange={(e) =>
+                            setEditableItems((prev) =>
+                              prev.map((item, i) =>
+                                i === idx ? { ...item, serviceId: Number(e.target.value) } : item
+                              )
+                            )
+                          }
+                          sx={{
+                            bgcolor: '#FFFFFF !important',
+                            color: '#0F172A !important',
+                            fontWeight: 700,
+                            fontSize: 12.5,
+                          }}
+                        >
+                          {services.map((s: any) => (
+                            <MenuItem key={s.id} value={s.id} sx={{ fontSize: 12.5, fontWeight: 600 }}>
+                              {s.serviceName}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+
+                      {/* Quantity Stepper */}
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          border: '1.5px solid #CBD5E1',
+                          borderRadius: 1.5,
+                          bgcolor: '#F8FAFC',
+                          px: 0.5,
+                          height: 40,
+                        }}
+                      >
+                        <Button
+                          size="small"
+                          onClick={() =>
+                            setEditableItems((prev) =>
+                              prev.map((item, i) =>
+                                i === idx ? { ...item, quantity: Math.max(1, item.quantity - 1) } : item
+                              )
+                            )
+                          }
+                          sx={{ minWidth: 28, p: 0, fontWeight: 900, fontSize: 16, color: '#334155 !important' }}
+                        >
+                          −
+                        </Button>
+                        <Typography sx={{ px: 1.25, fontWeight: 900, fontSize: 14, color: '#0F172A !important' }}>
+                          {row.quantity}
+                        </Typography>
+                        <Button
+                          size="small"
+                          onClick={() =>
+                            setEditableItems((prev) =>
+                              prev.map((item, i) =>
+                                i === idx ? { ...item, quantity: item.quantity + 1 } : item
+                              )
+                            )
+                          }
+                          sx={{ minWidth: 28, p: 0, fontWeight: 900, fontSize: 16, color: '#4F46E5 !important' }}
+                        >
+                          +
+                        </Button>
+                      </Box>
+                    </Box>
+                  </Box>
+                </Box>
+              );
+            })}
+          </Box>
+
+          {/* Add Garment Row Button */}
+          <Button
+            fullWidth
+            variant="outlined"
+            startIcon={<AddCircleOutlineIcon />}
+            onClick={() =>
+              setEditableItems((prev) => [
+                ...prev,
+                {
+                  clothType: 'Shirt',
+                  serviceId: editableItems[editableItems.length - 1]?.serviceId || defaultServiceId,
+                  quantity: 1,
+                  checked: true,
+                },
+              ])
+            }
+            sx={{
+              mt: 1.5,
+              py: 1,
+              borderRadius: 2,
+              borderStyle: 'dashed',
+              borderWidth: 1.5,
+              borderColor: '#4F46E5',
+              color: '#4F46E5 !important',
+              fontWeight: 800,
+              textTransform: 'none',
+              fontSize: 13,
+              bgcolor: '#EEF2FF',
+            }}
+          >
+            + Add Another Cloth / Garment (e.g. Shirt, Pant)
+          </Button>
+
+          {/* Optional Verification Note */}
+          <TextField
+            fullWidth
+            size="small"
+            label="Verification Note (Optional)"
+            placeholder="e.g. Customer gave Shirt instead of T-Shirt, verified on pickup"
+            value={verificationNotes}
+            onChange={(e) => setVerificationNotes(e.target.value)}
+            sx={{
+              mt: 2,
+              bgcolor: '#FFFFFF !important',
+              borderRadius: 1.5,
+              '& .MuiInputBase-root': { bgcolor: '#FFFFFF !important', color: '#0F172A !important', fontSize: 12.5 },
+              '& .MuiInputBase-input': { color: '#0F172A !important', WebkitTextFillColor: '#0F172A !important' },
+              '& .MuiInputLabel-root': { color: '#475569 !important', fontWeight: 700 },
+            }}
+          />
+        </DialogContent>
+
+        <DialogActions sx={{ px: 2, py: 1.5, bgcolor: '#FFFFFF !important', borderTop: '1px solid #E2E8F0', gap: 1 }}>
+          <Button
+            onClick={() => setVerifyOpen(false)}
+            disabled={savingClothes}
+            sx={{
+              flex: 1,
+              borderRadius: 2,
+              textTransform: 'none',
+              fontWeight: 700,
+              color: '#475569 !important',
+              bgcolor: '#F1F5F9',
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            disabled={savingClothes}
+            onClick={handleSaveVerifiedClothes}
+            sx={{
+              flex: 1.6,
+              borderRadius: 2,
+              textTransform: 'none',
+              fontWeight: 900,
+              fontSize: 13,
+              bgcolor: '#10B981 !important',
+              color: '#FFFFFF !important',
+              boxShadow: '0 2px 8px rgba(16, 185, 129, 0.35)',
+              '&:hover': { bgcolor: '#059669 !important' },
+            }}
+          >
+            {savingClothes
+              ? 'Approving...'
+              : `✅ Approve (${editableItems.reduce((s, r) => s + (Number(r.quantity) || 0), 0)} Clothes)`}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </>
   );
 };
@@ -1343,12 +2003,14 @@ const DeliveryCard: React.FC<{
 
           {/* Customer Info */}
           <Box sx={{ px: 2, pt: 1.5, pb: 0.5 }}>
-            {/* Prominent Order No Badge */}
+            {/* Prominent Order No + Order Status + Total Clothes Badge */}
             <Box
               sx={{
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: 0.75,
                 px: 1.5,
                 py: 1,
                 mb: 1.5,
@@ -1360,17 +2022,33 @@ const DeliveryCard: React.FC<{
             >
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
                 <Typography sx={{ fontSize: 12, fontWeight: 800, color: '#78350F' }}>
-                  📦 Order No:
+                  📦 Order:
                 </Typography>
                 <Typography sx={{ fontSize: 14, fontWeight: 900, color: '#D97706', letterSpacing: '0.5px' }}>
                   {delivery.order?.orderNumber || (delivery as any).orderNumber || `ORD-${String(delivery.orderId).padStart(5, '0')}`}
                 </Typography>
               </Box>
-              <Chip
-                label={delivery.order?.orderNumber ? 'Linked Order' : `Delivery #${delivery.id}`}
-                size="small"
-                sx={{ height: 20, fontSize: 10, fontWeight: 800, bgcolor: '#FDE68A', color: '#92400E' }}
-              />
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6, flexWrap: 'wrap' }}>
+                {delivery.order?.orderStatus && (
+                  <Chip
+                    label={(orderStatusBadgeConfig[delivery.order.orderStatus]?.label) || delivery.order.orderStatus}
+                    size="small"
+                    sx={{
+                      height: 22,
+                      fontSize: 10.5,
+                      fontWeight: 800,
+                      bgcolor: orderStatusBadgeConfig[delivery.order.orderStatus]?.bg || '#FDE68A',
+                      color: orderStatusBadgeConfig[delivery.order.orderStatus]?.color || '#92400E',
+                      border: `1px solid ${orderStatusBadgeConfig[delivery.order.orderStatus]?.border || '#F59E0B'}`,
+                    }}
+                  />
+                )}
+                <Chip
+                  label={`🧺 ${getTotalClothesCount(delivery.order)} Clothes`}
+                  size="small"
+                  sx={{ height: 22, fontSize: 11, fontWeight: 900, bgcolor: '#D97706', color: '#FFFFFF' }}
+                />
+              </Box>
             </Box>
 
             {customer && (
@@ -1406,21 +2084,53 @@ const DeliveryCard: React.FC<{
               </>
             )}
 
-            {/* Order items summary */}
+            {/* Order items summary with full clothes count & service breakdown */}
             {delivery.order?.orderItems && delivery.order.orderItems.length > 0 && (
               <Box
                 sx={{
-                  mb: 1, px: 1.5, py: 0.75,
-                  bgcolor: '#F9FAFB', borderRadius: 2,
-                  border: '1px solid #E5E7EB',
+                  mb: 1.25, p: 1.25,
+                  bgcolor: '#FFFBEB', borderRadius: 2,
+                  border: '1px solid #FDE68A',
                 }}
               >
-                <Typography sx={{ fontSize: 10, fontWeight: 700, color: '#6B7280', mb: 0.25, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                  Items to Deliver
-                </Typography>
-                <Typography sx={{ fontSize: 12, color: '#374151' }}>
-                  {delivery.order.orderItems.map((i) => `${i.clothType} ×${i.quantity}`).join('  •  ')}
-                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.75 }}>
+                  <Typography sx={{ fontSize: 11, fontWeight: 800, color: '#92400E', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                    🧺 Clothes to Deliver ({getTotalClothesCount(delivery.order)} pcs)
+                  </Typography>
+                </Box>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                  {delivery.order.orderItems.map((item, idx) => (
+                    <Box
+                      key={item.id || idx}
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        px: 1,
+                        py: 0.5,
+                        bgcolor: '#FFFFFF',
+                        borderRadius: 1.25,
+                        border: '1px solid #FDE68A',
+                      }}
+                    >
+                      <Box>
+                        <Typography sx={{ fontSize: 12.5, fontWeight: 800, color: '#111827' }}>
+                          {idx + 1}. {item.clothType}
+                        </Typography>
+                        {item.service?.serviceName && (
+                          <Typography sx={{ fontSize: 10.5, fontWeight: 600, color: '#D97706' }}>
+                            {item.service.serviceName}
+                          </Typography>
+                        )}
+                      </Box>
+                      <Chip
+                        label={`× ${item.quantity}`}
+                        size="small"
+                        sx={{ height: 20, fontSize: 11, fontWeight: 900, bgcolor: '#FEF3C7', color: '#92400E' }}
+                      />
+                    </Box>
+                  ))}
+                </Box>
               </Box>
             )}
 
@@ -1889,6 +2599,28 @@ const DeliveryBoyPage: React.FC = () => {
   const prevDeliveryCount = useRef<number>(-1);
 
   const { data: laundryShops = [] } = useQuery({ queryKey: ['laundry-shops'], queryFn: getLaundryShops });
+  const { data: resolvedCatalog } = useQuery({
+    queryKey: ['delivery-boy-catalog'],
+    queryFn: () => api.get('/services/pricing/resolve').then((r) => r.data),
+    staleTime: 60_000,
+  });
+
+  const activeServices = useMemo(() => {
+    const list = resolvedCatalog?.services || [];
+    if (Array.isArray(list) && list.length > 0) return list;
+    return [
+      { id: 1, serviceName: 'Press / Ironing' },
+      { id: 2, serviceName: 'Dry Cleaning' },
+      { id: 6, serviceName: 'Grivana Priority' },
+    ];
+  }, [resolvedCatalog]);
+
+  const garmentCatalog = useMemo(() => {
+    const prodNames = Array.isArray(resolvedCatalog?.products)
+      ? resolvedCatalog.products.map((p: any) => p.productName).filter(Boolean)
+      : [];
+    return Array.from(new Set([...DEFAULT_GARMENT_TYPES, ...prodNames]));
+  }, [resolvedCatalog]);
 
   const {
     data: rawPickups = [],
@@ -2081,9 +2813,17 @@ const DeliveryBoyPage: React.FC = () => {
   const pickupMutation = useMutation({
     mutationFn: ({ id, status, laundryShopId }: { id: number; status: string; laundryShopId?: number }) =>
       updateMyPickupStatus(id, status, laundryShopId),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       qc.invalidateQueries({ queryKey: ['my-pickups'] });
-      setToast({ msg: 'Pickup status updated!', severity: 'success' });
+      qc.invalidateQueries({ queryKey: ['my-deliveries'] });
+      qc.invalidateQueries({ queryKey: ['orders'] });
+      qc.invalidateQueries({ queryKey: ['pickups'] });
+      setToast({
+        msg: variables.laundryShopId
+          ? 'Pickup completed & Order moved to Laundry!'
+          : 'Pickup status updated!',
+        severity: 'success',
+      });
     },
     onError: () => setToast({ msg: 'Failed to update. Try again.', severity: 'error' }),
   });
@@ -2360,7 +3100,10 @@ const DeliveryBoyPage: React.FC = () => {
                       key={pickup.id}
                       pickup={pickup}
                       laundryShops={laundryShops}
+                      services={activeServices}
+                      garmentCatalog={garmentCatalog}
                       onAction={(id, status, shopId) => pickupMutation.mutate({ id, status, laundryShopId: shopId })}
+                      onClothesVerified={(msg) => setToast({ msg, severity: 'success' })}
                       isLoading={pickupMutation.isPending}
                     />
                   ))}
@@ -2378,7 +3121,10 @@ const DeliveryBoyPage: React.FC = () => {
                           key={pickup.id}
                           pickup={pickup}
                           laundryShops={laundryShops}
+                          services={activeServices}
+                          garmentCatalog={garmentCatalog}
                           onAction={(id, status, shopId) => pickupMutation.mutate({ id, status, laundryShopId: shopId })}
+                          onClothesVerified={(msg) => setToast({ msg, severity: 'success' })}
                           isLoading={pickupMutation.isPending}
                         />
                       ))}
