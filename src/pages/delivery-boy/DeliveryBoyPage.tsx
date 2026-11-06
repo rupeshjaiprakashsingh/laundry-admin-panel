@@ -59,6 +59,15 @@ import {
 } from '../../api/deliveryBoy';
 import { logout } from '../../app/authSlice';
 import { useAuth } from '../../hooks/useAuth';
+import {
+  buildInlineGarmentRows,
+  extractScriptBundleName,
+  getItemsSignature,
+  getPhysicalClothesSummary,
+  hasPhysicalAdjustments,
+  toVerifyOrderPayload,
+  type InlineGarmentRow,
+} from './clothesMatcher';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -274,7 +283,7 @@ const PickupCard: React.FC<{
   onClothesVerified: (msg: string) => void;
   isLoading: boolean;
 }> = ({ pickup, laundryShops: rawLaundryShops, services, garmentCatalog, onAction, onClothesVerified, isLoading }) => {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(pickup.status !== 'Completed' && pickup.status !== 'Cancelled');
   const [confirmDialog, setConfirmDialog] = useState<{ status: string; label: string } | null>(null);
   const [verifyOpen, setVerifyOpen] = useState(false);
   const [editableItems, setEditableItems] = useState<EditableGarmentRow[]>([]);
@@ -289,29 +298,64 @@ const PickupCard: React.FC<{
     return 1;
   }, [pickup.order, services]);
 
+  const defaultServiceName = useMemo(() => {
+    const firstOrderServiceName = pickup.order?.orderItems?.[0]?.service?.serviceName;
+    if (firstOrderServiceName) return firstOrderServiceName;
+    if (services && services.length > 0) return services[0].serviceName || 'Press / Ironing';
+    return 'Press / Ironing';
+  }, [pickup.order, services]);
+
+  const itemsSig = useMemo(() => getItemsSignature(pickup.order?.orderItems), [pickup.order?.orderItems]);
+  const [inlineRows, setInlineRows] = useState<InlineGarmentRow[]>(() =>
+    buildInlineGarmentRows(pickup.order?.orderItems, defaultServiceId, defaultServiceName),
+  );
+
+  const prevSigRef = useRef(itemsSig);
+  useEffect(() => {
+    if (prevSigRef.current !== itemsSig) {
+      prevSigRef.current = itemsSig;
+      setInlineRows(buildInlineGarmentRows(pickup.order?.orderItems, defaultServiceId, defaultServiceName));
+    }
+  }, [itemsSig, pickup.order?.orderItems, defaultServiceId, defaultServiceName]);
+
+  const hasInlineDiff = useMemo(() => hasPhysicalAdjustments(inlineRows), [inlineRows]);
+  const clothesSummary = useMemo(() => getPhysicalClothesSummary(inlineRows), [inlineRows]);
+
   const openVerifyModal = useCallback(() => {
-    const existing = pickup.order?.orderItems || [];
-    if (existing.length > 0) {
+    const activeInline = inlineRows.filter((r) => r.physicalQty > 0);
+    if (activeInline.length > 0) {
       setEditableItems(
-        existing.map((item) => ({
-          clothType: item.clothType || 'Shirt',
-          serviceId: Number(item.serviceId || item.service?.id || defaultServiceId),
-          quantity: Math.max(1, Number(item.quantity) || 1),
+        activeInline.map((row) => ({
+          clothType: row.clothType || 'Shirt',
+          serviceId: Number(row.serviceId || defaultServiceId),
+          quantity: Math.max(1, Number(row.physicalQty) || 1),
           checked: true,
-        }))
+        })),
       );
     } else {
-      setEditableItems([
-        {
-          clothType: 'Shirt',
-          serviceId: defaultServiceId,
-          quantity: 1,
-          checked: true,
-        },
-      ]);
+      const existing = pickup.order?.orderItems || [];
+      if (existing.length > 0) {
+        setEditableItems(
+          existing.map((item) => ({
+            clothType: item.clothType || 'Shirt',
+            serviceId: Number(item.serviceId || item.service?.id || defaultServiceId),
+            quantity: Math.max(1, Number(item.quantity) || 1),
+            checked: true,
+          })),
+        );
+      } else {
+        setEditableItems([
+          {
+            clothType: 'Shirt',
+            serviceId: defaultServiceId,
+            quantity: 1,
+            checked: true,
+          },
+        ]);
+      }
     }
     setVerifyOpen(true);
-  }, [pickup.order, defaultServiceId]);
+  }, [inlineRows, pickup.order, defaultServiceId]);
 
   const handleSaveVerifiedClothes = async () => {
     if (!pickup.order?.id) return;
@@ -347,6 +391,39 @@ const PickupCard: React.FC<{
     } catch (err: any) {
       const msg = err?.response?.data?.message || 'Failed to update clothes. Please try again.';
       alert(Array.isArray(msg) ? msg.join(', ') : msg);
+    } finally {
+      setSavingClothes(false);
+    }
+  };
+
+  const handleSaveInlineAdjustments = async (): Promise<boolean> => {
+    if (!pickup.order?.id) return false;
+    const validItems = toVerifyOrderPayload(inlineRows, defaultServiceId);
+    if (validItems.length === 0) {
+      alert('At least 1 cloth must remain in the order. If the customer handed over 0 clothes, please cancel the pickup instead.');
+      return false;
+    }
+
+    setSavingClothes(true);
+    try {
+      const updatedOrder = await verifyOrderItems(
+        pickup.order.id,
+        validItems,
+        'Physical clothes count matched & adjusted by Delivery Partner at pickup',
+      );
+      setClothesApprovedInSession(true);
+      await qc.invalidateQueries({ queryKey: ['my-pickups'] });
+      await qc.invalidateQueries({ queryKey: ['my-deliveries'] });
+      await qc.invalidateQueries({ queryKey: ['orders'] });
+      await qc.invalidateQueries({ queryKey: ['pickups'] });
+      const totalPcs = validItems.reduce((s, i) => s + i.quantity, 0);
+      const newNet = updatedOrder?.netAmount !== undefined ? ` (₹${Number(updatedOrder.netAmount).toFixed(2)})` : '';
+      onClothesVerified(`✅ Physical clothes adjusted & saved! Total: ${totalPcs} clothes${newNet}`);
+      return true;
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || 'Failed to update clothes. Please try again.';
+      alert(Array.isArray(msg) ? msg.join(', ') : msg);
+      return false;
     } finally {
       setSavingClothes(false);
     }
@@ -639,38 +716,57 @@ const PickupCard: React.FC<{
               </Box>
             </Box>
 
-            {/* ── Clothes Count, Garment List & Live Fix/Approve Section ── */}
-            {pickup.order && (
-              <Box
-                sx={{
-                  mt: 1,
-                  mb: 1.25,
-                  p: 1.5,
-                  bgcolor: '#F8FAFC',
-                  borderRadius: 2.5,
-                  border: clothesApprovedInSession ? '1.5px solid #10B981' : '1.5px solid #CBD5E1',
-                }}
-              >
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                    <Typography sx={{ fontSize: 11.5, fontWeight: 900, color: '#1E293B', textTransform: 'uppercase', letterSpacing: 0.4 }}>
-                      🧺 Clothes in Order ({totalClothesCount} pcs)
-                    </Typography>
-                    {(clothesApprovedInSession || (pickup.order.notes && pickup.order.notes.includes('[Verified:'))) && (
-                      <Chip
-                        label="Verified ✓"
-                        size="small"
-                        sx={{
-                          height: 18,
-                          fontSize: 9.5,
-                          fontWeight: 800,
-                          bgcolor: '#DCFCE7',
-                          color: '#15803D',
-                          border: '1px solid #86EFAC',
-                        }}
-                      />
-                    )}
-                  </Box>
+            {/* ── Physical vs Ordered Clothes Match & Inline Adjustment Section ── */}
+            <Box
+              sx={{
+                mt: 1,
+                mb: 1.25,
+                p: 1.5,
+                bgcolor: hasInlineDiff ? '#FFFBEB' : '#F8FAFC',
+                borderRadius: 2.5,
+                border: hasInlineDiff
+                  ? '2px solid #F59E0B'
+                  : clothesApprovedInSession || (clothesSummary.totalRows > 0 && clothesSummary.matchedRows === clothesSummary.totalRows)
+                  ? '1.5px solid #10B981'
+                  : '1.5px solid #6366F1',
+                boxShadow: '0 2px 6px rgba(15, 23, 42, 0.04)',
+              }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 0.75, flexWrap: 'wrap', mb: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6, flexWrap: 'wrap' }}>
+                  <Typography sx={{ fontSize: 11.5, fontWeight: 900, color: '#1E293B', textTransform: 'uppercase', letterSpacing: 0.4 }}>
+                    🧺 Clothes to Match ({hasInlineDiff ? `${clothesSummary.physicalTotal} / ${clothesSummary.orderedTotal}` : totalClothesCount} pcs)
+                  </Typography>
+                  {(clothesApprovedInSession || (pickup.order?.notes && pickup.order.notes.includes('[Verified:'))) && !hasInlineDiff && (
+                    <Chip
+                      label="Verified ✓"
+                      size="small"
+                      sx={{
+                        height: 18,
+                        fontSize: 9.5,
+                        fontWeight: 800,
+                        bgcolor: '#DCFCE7',
+                        color: '#15803D',
+                        border: '1px solid #86EFAC',
+                      }}
+                    />
+                  )}
+                  {clothesSummary.totalRows > 0 && clothesSummary.matchedRows === clothesSummary.totalRows && !hasInlineDiff && (
+                    <Chip
+                      label="All Matched ✓"
+                      size="small"
+                      sx={{
+                        height: 18,
+                        fontSize: 9.5,
+                        fontWeight: 800,
+                        bgcolor: '#ECFDF5',
+                        color: '#047857',
+                        border: '1px solid #6EE7B7',
+                      }}
+                    />
+                  )}
+                </Box>
+                {pickup.order && !isDone && (
                   <Button
                     size="small"
                     variant="contained"
@@ -681,7 +777,7 @@ const PickupCard: React.FC<{
                       fontWeight: 800,
                       fontSize: 11,
                       py: 0.4,
-                      px: 1.2,
+                      px: 1.1,
                       borderRadius: 1.5,
                       bgcolor: '#4F46E5',
                       color: '#fff',
@@ -689,40 +785,206 @@ const PickupCard: React.FC<{
                       '&:hover': { bgcolor: '#4338CA' },
                     }}
                   >
-                    Count / Fix Clothes
+                    Add / Swap Cloth
                   </Button>
-                </Box>
+                )}
+              </Box>
 
-                {pickup.order.orderItems && pickup.order.orderItems.length > 0 ? (
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.6 }}>
-                    {pickup.order.orderItems.map((item, idx) => (
+              {/* Service Breakdown Chips + Check All Toggle */}
+              {clothesSummary.serviceBreakdown.length > 0 && (
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 0.5, flexWrap: 'wrap', mb: 1 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
+                    {clothesSummary.serviceBreakdown.map((svc) => (
+                      <Chip
+                        key={svc.serviceName}
+                        label={`${svc.serviceName}: ${svc.count} ${svc.count === 1 ? 'pc' : 'pcs'}`}
+                        size="small"
+                        sx={{
+                          height: 20,
+                          fontSize: 10.5,
+                          fontWeight: 800,
+                          bgcolor: '#E0E7FF',
+                          color: '#3730A3',
+                        }}
+                      />
+                    ))}
+                  </Box>
+                  {!isDone && inlineRows.length > 0 && (
+                    <Button
+                      size="small"
+                      variant="text"
+                      onClick={() => {
+                        const allChecked = inlineRows.every((r) => r.matched);
+                        setInlineRows((prev) => prev.map((r) => ({ ...r, matched: !allChecked })));
+                      }}
+                      sx={{
+                        textTransform: 'none',
+                        fontSize: 10.5,
+                        fontWeight: 800,
+                        py: 0,
+                        px: 0.75,
+                        minWidth: 0,
+                        color: '#059669',
+                      }}
+                    >
+                      {inlineRows.every((r) => r.matched) ? 'Uncheck All' : '☑ Match All'}
+                    </Button>
+                  )}
+                </Box>
+              )}
+
+              {inlineRows.length > 0 ? (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.65 }}>
+                  {inlineRows.map((row, idx) => {
+                    const isMissingAll = row.physicalQty === 0;
+                    const diff = row.physicalQty - row.orderedQty;
+                    return (
                       <Box
-                        key={item.id || idx}
+                        key={row.key}
                         sx={{
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'space-between',
-                          px: 1.25,
+                          gap: 0.75,
+                          px: 1,
                           py: 0.75,
-                          bgcolor: '#FFFFFF',
+                          bgcolor: isMissingAll ? '#FEF2F2' : row.matched ? '#F0FDF4' : '#FFFFFF',
                           borderRadius: 1.5,
-                          border: '1px solid #E2E8F0',
+                          border: isMissingAll
+                            ? '1px dashed #EF4444'
+                            : diff !== 0
+                            ? '1.5px solid #F59E0B'
+                            : row.matched
+                            ? '1.5px solid #10B981'
+                            : '1px solid #E2E8F0',
                         }}
                       >
-                        <Box sx={{ minWidth: 0, flex: 1 }}>
-                          <Typography sx={{ fontSize: 13, fontWeight: 800, color: '#0F172A', lineHeight: 1.2 }}>
-                            {idx + 1}. {item.clothType}
-                          </Typography>
-                          {item.service?.serviceName && (
-                            <Typography sx={{ fontSize: 11, fontWeight: 600, color: '#6366F1' }}>
-                              {item.service.serviceName}
-                              {item.unitPrice !== undefined ? ` • ₹${Number(item.unitPrice).toFixed(0)}/pc` : ''}
-                            </Typography>
+                        <Box
+                          onClick={() => {
+                            if (isDone) return;
+                            setInlineRows((prev) =>
+                              prev.map((r, i) => (i === idx ? { ...r, matched: !r.matched } : r)),
+                            );
+                          }}
+                          sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 0.75,
+                            minWidth: 0,
+                            flex: 1,
+                            cursor: isDone ? 'default' : 'pointer',
+                          }}
+                        >
+                          {!isDone && (
+                            row.matched ? (
+                              <CheckBoxIcon sx={{ color: '#10B981', fontSize: 20, flexShrink: 0 }} />
+                            ) : (
+                              <CheckBoxOutlineBlankIcon sx={{ color: '#94A3B8', fontSize: 20, flexShrink: 0 }} />
+                            )
                           )}
+                          <Box sx={{ minWidth: 0, flex: 1 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
+                              <Typography
+                                sx={{
+                                  fontSize: 13,
+                                  fontWeight: 800,
+                                  color: isMissingAll ? '#991B1B' : '#0F172A',
+                                  lineHeight: 1.2,
+                                  textDecoration: isMissingAll ? 'line-through' : 'none',
+                                }}
+                              >
+                                {idx + 1}. {row.clothType}
+                              </Typography>
+                              {diff !== 0 && (
+                                <Chip
+                                  label={
+                                    isMissingAll
+                                      ? `Missing (Ordered ${row.orderedQty})`
+                                      : `Ordered ${row.orderedQty} (${diff > 0 ? `+${diff}` : diff})`
+                                  }
+                                  size="small"
+                                  sx={{
+                                    height: 17,
+                                    fontSize: 9.5,
+                                    fontWeight: 800,
+                                    bgcolor: isMissingAll ? '#FEE2E2' : '#FEF3C7',
+                                    color: isMissingAll ? '#991B1B' : '#92400E',
+                                  }}
+                                />
+                              )}
+                            </Box>
+                            <Typography sx={{ fontSize: 11, fontWeight: 600, color: '#6366F1' }}>
+                              {row.serviceName}
+                              {row.unitPrice !== undefined ? ` • ₹${Number(row.unitPrice).toFixed(0)}/pc` : ''}
+                            </Typography>
+                          </Box>
                         </Box>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+
+                        {!isDone ? (
+                          <Box
+                            sx={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              border: '1.5px solid #CBD5E1',
+                              borderRadius: 1.5,
+                              bgcolor: '#F8FAFC',
+                              height: 30,
+                              flexShrink: 0,
+                            }}
+                          >
+                            <IconButton
+                              size="small"
+                              disabled={savingClothes || row.physicalQty <= 0}
+                              onClick={() =>
+                                setInlineRows((prev) =>
+                                  prev.map((r, i) =>
+                                    i === idx
+                                      ? {
+                                          ...r,
+                                          physicalQty: Math.max(0, r.physicalQty - 1),
+                                          matched: Math.max(0, r.physicalQty - 1) > 0,
+                                        }
+                                      : r,
+                                  ),
+                                )
+                              }
+                              sx={{ width: 26, height: 26, fontWeight: 900, fontSize: 15, color: '#DC2626' }}
+                              title="Decrease physical count (missing cloth)"
+                            >
+                              −
+                            </IconButton>
+                            <Typography
+                              sx={{
+                                minWidth: 24,
+                                textAlign: 'center',
+                                fontWeight: 900,
+                                fontSize: 13,
+                                color: isMissingAll ? '#DC2626' : '#0F172A',
+                              }}
+                            >
+                              {row.physicalQty}
+                            </Typography>
+                            <IconButton
+                              size="small"
+                              disabled={savingClothes}
+                              onClick={() =>
+                                setInlineRows((prev) =>
+                                  prev.map((r, i) =>
+                                    i === idx
+                                      ? { ...r, physicalQty: r.physicalQty + 1, matched: true }
+                                      : r,
+                                  ),
+                                )
+                              }
+                              sx={{ width: 26, height: 26, fontWeight: 900, fontSize: 15, color: '#059669' }}
+                              title="Increase physical count (extra cloth)"
+                            >
+                              +
+                            </IconButton>
+                          </Box>
+                        ) : (
                           <Chip
-                            label={`Qty: ${item.quantity}`}
+                            label={`Qty: ${row.physicalQty}`}
                             size="small"
                             sx={{
                               height: 22,
@@ -733,26 +995,89 @@ const PickupCard: React.FC<{
                               border: '1px solid #C7D2FE',
                             }}
                           />
-                          {item.totalPrice !== undefined && (
-                            <Typography sx={{ fontSize: 12, fontWeight: 800, color: '#047857', minWidth: 48, textAlign: 'right' }}>
-                              ₹{Number(item.totalPrice).toFixed(0)}
-                            </Typography>
-                          )}
-                        </Box>
+                        )}
                       </Box>
-                    ))}
-                  </Box>
-                ) : (
+                    );
+                  })}
+                </Box>
+              ) : (
+                <Box sx={{ py: 0.5 }}>
                   <Typography sx={{ fontSize: 12, color: '#64748B', fontStyle: 'italic' }}>
-                    No clothes listed yet. Tap "Count / Fix Clothes" to add garments collected from the customer.
+                    No clothes listed on this order yet. Tap "Add / Swap Cloth" to record the physical clothes collected from the customer.
                   </Typography>
-                )}
+                </Box>
+              )}
 
+              {/* Sticky Inline Save Bar when physical count differs from ordered count */}
+              {!isDone && hasInlineDiff && pickup.order && (
+                <Box
+                  sx={{
+                    mt: 1.25,
+                    p: 1.1,
+                    borderRadius: 2,
+                    bgcolor: '#ECFDF5',
+                    border: '1.5px solid #10B981',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 0.75,
+                  }}
+                >
+                  <Typography sx={{ fontSize: 11.5, fontWeight: 800, color: '#065F46' }}>
+                    ⚠️ Physical count adjusted: Ordered {clothesSummary.orderedTotal} pcs → Collecting {clothesSummary.physicalTotal} pcs
+                    {clothesSummary.missingTotal > 0 ? ` (-${clothesSummary.missingTotal} missing)` : ''}
+                    {clothesSummary.extraTotal > 0 ? ` (+${clothesSummary.extraTotal} extra)` : ''}
+                  </Typography>
+                  <Box sx={{ display: 'flex', gap: 1 }}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      disabled={savingClothes}
+                      onClick={() =>
+                        setInlineRows(
+                          buildInlineGarmentRows(pickup.order?.orderItems, defaultServiceId, defaultServiceName),
+                        )
+                      }
+                      sx={{
+                        textTransform: 'none',
+                        fontWeight: 700,
+                        fontSize: 11,
+                        borderRadius: 1.5,
+                        borderColor: '#64748B',
+                        color: '#334155',
+                      }}
+                    >
+                      Reset
+                    </Button>
+                    <Button
+                      fullWidth
+                      size="small"
+                      variant="contained"
+                      disabled={savingClothes || clothesSummary.physicalTotal === 0}
+                      onClick={() => void handleSaveInlineAdjustments()}
+                      sx={{
+                        textTransform: 'none',
+                        fontWeight: 900,
+                        fontSize: 11.5,
+                        borderRadius: 1.5,
+                        bgcolor: '#10B981',
+                        color: '#FFFFFF',
+                        '&:hover': { bgcolor: '#059669' },
+                      }}
+                    >
+                      {savingClothes
+                        ? 'Saving...'
+                        : `💾 Save Adjusted Clothes (${clothesSummary.physicalTotal} pcs)`}
+                    </Button>
+                  </Box>
+                </Box>
+              )}
+
+              {!isDone && (
                 <Typography sx={{ fontSize: 10.5, color: '#475569', mt: 0.85, fontWeight: 600 }}>
-                  💡 Customer gave different clothes (e.g. Shirt instead of T-Shirt, or Pant + Shirt instead of Suit)? Tap <strong>Count / Fix Clothes</strong> to edit & approve!
+                  💡 Match physical clothes using ☑ &amp; <strong>− / +</strong> for missing/extra items, or tap <strong>Add / Swap Cloth</strong> if customer gave a different garment type!
                 </Typography>
-              </Box>
-            )}
+              )}
+            </Box>
 
             {/* Payment Details */}
             {pickup.order && (
@@ -1525,9 +1850,13 @@ const PickupCard: React.FC<{
           </Button>
           <Button
             variant="contained"
-            disabled={isLoading || (confirmDialog?.status === 'Completed' && !selectedShopId)}
-            onClick={() => {
+            disabled={isLoading || savingClothes || (confirmDialog?.status === 'Completed' && !selectedShopId)}
+            onClick={async () => {
               if (confirmDialog) {
+                if (confirmDialog.status === 'Completed' && hasInlineDiff && pickup.order?.id) {
+                  const ok = await handleSaveInlineAdjustments();
+                  if (!ok) return;
+                }
                 onAction(pickup.id, confirmDialog.status, selectedShopId ? Number(selectedShopId) : undefined);
                 setConfirmDialog(null);
                 setShowAddShop(false);
@@ -2848,11 +3177,55 @@ const DeliveryBoyPage: React.FC = () => {
     [deliveries],
   );
 
+  const checkForUpdatedBundle = useCallback(async (): Promise<boolean> => {
+    try {
+      const scripts = Array.from(document.querySelectorAll('script[src]'));
+      const currentSrc = scripts
+        .map((s) => s.getAttribute('src') || '')
+        .find((src) => /assets\/index-[A-Za-z0-9_-]+\.js/.test(src));
+      const currentBundle = currentSrc ? extractScriptBundleName(currentSrc) : null;
+      if (!currentBundle) return false;
+
+      const res = await fetch(`/admin/index.html?_t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
+      });
+      if (!res.ok) return false;
+      const html = await res.text();
+      const latestBundle = extractScriptBundleName(html);
+      if (latestBundle && latestBundle !== currentBundle) {
+        window.location.reload();
+        return true;
+      }
+    } catch {
+      // Ignore transient offline errors
+    }
+    return false;
+  }, []);
+
+  useEffect(() => {
+    void checkForUpdatedBundle();
+    const versionTimer = setInterval(() => {
+      void checkForUpdatedBundle();
+    }, 30_000);
+    const onVisChange = () => {
+      if (document.visibilityState === 'visible') {
+        void checkForUpdatedBundle();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisChange);
+    return () => {
+      clearInterval(versionTimer);
+      document.removeEventListener('visibilitychange', onVisChange);
+    };
+  }, [checkForUpdatedBundle]);
+
   const handleRefresh = useCallback(() => {
+    void checkForUpdatedBundle();
     refetchPickups();
     refetchDeliveries();
     setToast({ msg: 'Refreshing...', severity: 'success' });
-  }, [refetchPickups, refetchDeliveries]);
+  }, [checkForUpdatedBundle, refetchPickups, refetchDeliveries]);
 
   const handleLogout = () => {
     dispatch(logout());
@@ -2998,7 +3371,7 @@ const DeliveryBoyPage: React.FC = () => {
         sx={{
           flex: 1,
           overflowY: 'auto',
-          overscrollBehavior: 'contain',
+          overscrollBehaviorY: 'auto',
           WebkitOverflowScrolling: 'touch',
           touchAction: 'pan-y',
           px: 2,
